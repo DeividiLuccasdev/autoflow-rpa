@@ -10,17 +10,17 @@ from .integrity import is_duplicate
 MAX_ATTEMPTS = 5
 LEASE_SECONDS = 60
 
-def enqueue(db, content):
+def enqueue(db, content, owner_id="legacy"):
     digest = hashlib.sha256(content).hexdigest()
-    execution = Execution(sha256=digest, content=content)
+    execution = Execution(sha256=digest, content=content, owner_id=owner_id)
     db.add(execution)
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        if not is_duplicate(exc, "executions", ["sha256"], "executions_sha256_key"):
+        if not is_duplicate(exc, "executions", ["owner_id", "sha256"], "executions_sha256_key"):
             raise
-        return db.scalar(select(Execution).where(Execution.sha256 == digest))
+        return db.scalar(select(Execution).where(Execution.sha256 == digest, Execution.owner_id == owner_id))
     db.refresh(execution)
     return execution
 
@@ -40,17 +40,17 @@ def process_execution(db, execution_id):
     else:
         try:
             with db.begin_nested():
-                invoice = Invoice(**payload.model_dump())
+                invoice = Invoice(**payload.model_dump(), owner_id=execution.owner_id)
                 db.add(invoice)
                 db.flush()
-                db.add(Document(invoice_id=invoice.id, sha256=execution.sha256, content=execution.content))
+                db.add(Document(invoice_id=invoice.id, owner_id=execution.owner_id, sha256=execution.sha256, content=execution.content))
                 db.add_all([AuditEvent(invoice_id=invoice.id, event="invoice.validated", actor="worker"), AuditEvent(invoice_id=invoice.id, event="document.extracted", actor="worker")])
                 db.flush()
             execution.invoice_id = invoice.id
             execution.status = "completed"
         except IntegrityError as exc:
-            if not (is_duplicate(exc, "invoices", ["issuer_cnpj", "number", "series"], "uq_invoice_identity") or
-                    is_duplicate(exc, "documents", ["sha256"], "documents_sha256_key")):
+            if not (is_duplicate(exc, "invoices", ["owner_id", "issuer_cnpj", "number", "series"], "uq_invoice_identity") or
+                    is_duplicate(exc, "documents", ["owner_id", "sha256"], "documents_sha256_key")):
                 raise
             execution.status = "duplicate"
             execution.error = "Nota ou documento já cadastrado"

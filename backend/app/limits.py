@@ -13,6 +13,8 @@ class BodyLimitMiddleware:
         chunks, total = [], 0
         # Rotas públicas só precisam de um PDF canônico de poucos KB ou corpo vazio.
         limit = min(self.limit, 131072) if scope["path"].startswith("/demo/") else self.limit
+        if scope["path"].startswith("/auth/"):
+            limit = 8192
         deadline = time.monotonic() + 30
         while True:
             try:

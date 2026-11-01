@@ -7,7 +7,8 @@ from .db import Base
 
 class Invoice(Base):
     __tablename__ = "invoices"
-    __table_args__ = (UniqueConstraint("issuer_cnpj", "number", "series", name="uq_invoice_identity"),)
+    __table_args__ = (UniqueConstraint("owner_id", "issuer_cnpj", "number", "series", name="uq_invoice_identity"),)
+    owner_id: Mapped[str] = mapped_column(String(36), default="legacy", server_default="legacy", index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     issuer_cnpj: Mapped[str] = mapped_column(String(14))
     number: Mapped[str] = mapped_column(String(30))
@@ -26,16 +27,20 @@ class AuditEvent(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("owner_id", "sha256", name="documents_sha256_key"),)
+    owner_id: Mapped[str] = mapped_column(String(36), default="legacy", server_default="legacy", index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     invoice_id: Mapped[str] = mapped_column(ForeignKey("invoices.id"), unique=True)
-    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
     content: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Execution(Base):
     __tablename__ = "executions"
+    __table_args__ = (UniqueConstraint("owner_id", "sha256", name="executions_sha256_key"),)
+    owner_id: Mapped[str] = mapped_column(String(36), default="legacy", server_default="legacy", index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
     content: Mapped[bytes] = mapped_column(LargeBinary)
     status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
     invoice_id: Mapped[str | None] = mapped_column(ForeignKey("invoices.id"), nullable=True)
@@ -44,3 +49,26 @@ class Execution(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     next_dispatch_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    email: Mapped[str] = mapped_column(String(254), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(256))
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(254))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LoginSession(Base):
+    __tablename__ = "login_sessions"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    csrf_token: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

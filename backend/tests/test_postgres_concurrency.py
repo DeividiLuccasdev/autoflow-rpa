@@ -90,7 +90,7 @@ def test_postgres_migrations(postgres):
     with engine.connect() as connection:
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
     with postgres() as db:
         execution = enqueue(db, pdf())
         process_execution(db, execution.id)

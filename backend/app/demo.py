@@ -13,6 +13,10 @@ SAMPLE = ASSETS / "nota-ficticia.pdf"
 def dashboard():
     return FileResponse(ASSETS / "index.html")
 
+@router.get("/workspace", include_in_schema=False)
+def workspace():
+    return FileResponse(ASSETS / "workspace.html")
+
 @router.get("/demo/sample", include_in_schema=False)
 def sample():
     return FileResponse(SAMPLE, media_type="application/pdf", filename="autoflow-nota-ficticia.pdf")
