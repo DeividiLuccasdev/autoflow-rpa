@@ -4,8 +4,8 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>AutoFlow RPA | Centro de operações</title>
   <meta name="description" content="Demonstração interativa do AutoFlow RPA: automação financeira, validação de documentos e auditoria.">
-  <link rel="stylesheet" href="/assets/style.css">
-  <script src="/assets/app.js" defer></script>
+  <link rel="stylesheet" href="/assets/style.css?v=automation-1">
+  <script src="/assets/app.js?v=automation-1" defer></script>
 </head>
 <body>
 <div class="app-shell">
@@ -44,3 +44,4 @@
 <dialog id="automation-dialog" class="automation-dialog"><div class="dialog-header"><div><span class="eyebrow">AUTOMAÇÃO EM AÇÃO</span><h2>Uma nota. Dois sistemas.</h2></div><button class="close-button" aria-label="Fechar" data-close="automation-dialog">✕</button></div><p class="dialog-description">O backend executa cada etapa: lê o PDF de exemplo, consulta a origem, confere valores, registra no destino e confirma o resultado.</p><div class="system-grid"><article><span class="system-label">01 / SISTEMA DE ORIGEM</span><h3>NovaTech ERP</h3><small>Conta a pagar CP-2026-0042</small><strong>R$ 123,45</strong><span class="system-state" id="source-state">Aguardando consulta</span></article><div class="system-arrow">→</div><article><span class="system-label">02 / SISTEMA DE DESTINO</span><h3>Orbit Finance</h3><small>Lançamentos desta sessão</small><strong id="target-count">0 registros</strong><span class="system-state" id="target-state">Aguardando automação</span></article></div><div id="automation-steps" class="automation-steps"></div><div id="automation-summary" aria-live="polite"></div><button class="primary-button automation-start" id="automation-start">Iniciar automação →</button><p class="privacy-note">Sistemas simulados · Estado temporário por até 15 minutos · Sem pagamentos reais</p></dialog>
 <div id="toast" role="status"></div>
 </body></html>
+
