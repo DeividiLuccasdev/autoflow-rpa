@@ -1,0 +1,36 @@
+services:
+  request-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autoflow
+      POSTGRES_PASSWORD: test_only
+      POSTGRES_DB: autoflow_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U autoflow -d autoflow_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  request-redis:
+    image: redis:7-alpine
+    command: [redis-server, --save, "", --appendonly, "no"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    depends_on:
+      request-db:
+        condition: service_healthy
+      request-redis:
+        condition: service_healthy
+    environment:
+      TEST_POSTGRES_URL: postgresql+psycopg://autoflow:test_only@request-db:5432/autoflow_test
+      TEST_REDIS_URL: redis://request-redis:6379/15
+      DATABASE_URL: sqlite:///:memory:
+      RUN_RPA_TESTS: "1"

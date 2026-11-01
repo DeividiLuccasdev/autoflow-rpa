@@ -8,3 +8,4 @@ node_modules/
 celerybeat-schedule*
 *.db-*
 rpa-evidence/
+test-results.xml
