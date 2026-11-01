@@ -32,5 +32,5 @@ services:
     environment:
       TEST_POSTGRES_URL: postgresql+psycopg://autoflow:test_only@request-db:5432/autoflow_test
       TEST_REDIS_URL: redis://request-redis:6379/15
-      DATABASE_URL: sqlite:///:memory:
+      DATABASE_URL: "sqlite:///:memory:"
       RUN_RPA_TESTS: "1"
