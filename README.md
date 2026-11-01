@@ -2,6 +2,16 @@
 
 Plataforma de portfólio para automação financeira com documentos e empresas fictícios.
 
+## Rodar todos os testes
+
+Com Python e Docker Desktop funcionando, execute na raiz:
+
+```powershell
+python scripts/test_all.py
+```
+
+O ambiente é descartável, com PostgreSQL, Redis, Celery e Chromium reais. Nenhum banco de produção é usado. Falhas e testes pulados encerram o comando com erro. Veja os [comportamentos cobertos e detalhes do isolamento](docs/request-specs.md).
+
 ## Implementado
 
 FastAPI com cadastro JSON e upload de PDF, validação determinística de CNPJ/valores, deduplicação no banco, auditoria e execução assíncrona Celery/Redis. PostgreSQL no Docker; SQLite para desenvolvimento local e testes rápidos. Migrações Alembic substituem create_all no início da API.
