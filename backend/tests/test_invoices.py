@@ -9,6 +9,8 @@ from app.models import AuditEvent
 
 @pytest.fixture
 def client(monkeypatch):
+    from app.http_security import limiter
+    limiter.clear()
     monkeypatch.setenv("AUTOFLOW_API_KEY", "test-key-" + "x" * 40)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

@@ -20,15 +20,17 @@ MAX_SESSIONS = 128
 MAX_RUNS = 5
 STEPS = ["Extrair documento", "Consultar ERP de origem", "Conferir valores", "Registrar no ERP de destino", "Confirmar o lançamento", "Concluir auditoria"]
 
-def context(session_id):
+def context(session_id, create=False):
     now = monotonic()
     for key in list(sessions):
         if now - sessions[key]["created"] > TTL:
             del sessions[key]
     key = str(session_id)
     if key not in sessions:
-        while len(sessions) >= MAX_SESSIONS:
-            sessions.popitem(last=False)
+        if not create:
+            raise HTTPException(404, "Sessão expirada ou não encontrada")
+        if len(sessions) >= MAX_SESSIONS:
+            raise HTTPException(429, "Demonstração ocupada; tente novamente em alguns minutos")
         sessions[key] = {"created": now, "runs": {}, "ledger": {}}
     return sessions[key]
 
@@ -43,7 +45,7 @@ def snapshot(state, run):
 @router.post("/runs", status_code=201)
 def create_run(x_demo_session: UUID = Header(...)):
     with lock:
-        state = context(x_demo_session)
+        state = context(x_demo_session, create=True)
         if len(state["runs"]) >= MAX_RUNS:
             raise HTTPException(429, "Limite de cinco demonstrações nesta sessão temporária")
         run = {"id": str(uuid4()), "step": 0, "status": "running", "events": []}

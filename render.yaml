@@ -6,7 +6,7 @@ services:
     region: oregon
     branch: main
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    buildCommand: python -m pip install "pip>=26.2,<27" && pip install -r requirements.txt
     startCommand: python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /ready
     autoDeployTrigger: checksPass

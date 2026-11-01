@@ -11,6 +11,8 @@ class BodyLimitMiddleware:
         if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
             return await self.app(scope, receive, send)
         chunks, total = [], 0
+        # Rotas públicas só precisam de um PDF canônico de poucos KB ou corpo vazio.
+        limit = min(self.limit, 131072) if scope["path"].startswith("/demo/") else self.limit
         deadline = time.monotonic() + 30
         while True:
             try:
@@ -21,7 +23,7 @@ class BodyLimitMiddleware:
                 return
             chunk = message.get("body", b"")
             total += len(chunk)
-            if total > self.limit:
+            if total > limit:
                 return await JSONResponse({"detail": "Corpo da requisição excede o limite"}, status_code=413)(scope, receive, send)
             chunks.append(chunk)
             if not message.get("more_body", False):

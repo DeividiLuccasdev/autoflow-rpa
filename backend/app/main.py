@@ -13,6 +13,7 @@ from .schemas import AuditRead, ExecutionRead, InvoiceCreate, InvoiceRead
 from .security import require_api_key
 from .integrity import is_duplicate
 from .limits import BodyLimitMiddleware
+from .http_security import HttpSecurityMiddleware
 from .demo import router as demo_router, ASSETS
 from .demo_automation import router as automation_router
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AutoFlow RPA", version="0.1.0", lifespan=lifespan,
               description="MVP local com dados fictícios. Cadastro e validação de notas; sem lançamentos externos.")
 app.add_middleware(BodyLimitMiddleware)
+app.add_middleware(HttpSecurityMiddleware)
 
 @app.get("/health")
 def health():
