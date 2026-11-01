@@ -8,8 +8,8 @@ O render.yaml cria somente uma API web Free e um PostgreSQL Free. Não cria work
 4. A API aplica Alembic antes de iniciar, com um único worker HTTP. O health check /ready verifica conexão e presença da tabela de notas.
 5. Após o deploy, consulte /health e /ready. Para usar /docs, copie a chave de Environment no painel e informe-a em Authorize. Teste o PDF examples/nota-ficticia.pdf: primeiro upload retorna 201 e a repetição retorna 409.
 
-Deploys futuros usam After CI Checks Pass. A primeira instalação pode iniciar o primeiro deploy durante a criação; confirme o CI do commit antes de aplicar. Não há acesso público ao PostgreSQL no Blueprint. A URL HTTPS da API e a documentação serão públicas, mas as rotas /api/v1 exigem a chave.
+Deploys futuros usam After CI Checks Pass. A primeira instalação pode iniciar o primeiro deploy durante a criação; confirme o CI do commit antes de aplicar. Não há acesso público ao PostgreSQL no Blueprint. A URL HTTPS da API e a documentação são públicas; as rotas /api/v1 exigem sessão individual ou chave operacional restrita ao acervo legado. Acesse /workspace e siga as [instruções de convite](accounts.md) para ativar contas. A migração 0004 mantém os registros existentes separados das novas contas.
 
-Este modo demonstra cadastro, extração e auditoria. Não representa a infraestrutura completa de RPA. Ainda faltam usuários individuais, limitação de taxa, observabilidade e política operacional para exposição além de uma demonstração controlada.
+Este modo demonstra contas individuais, cadastro, extração e auditoria, com limite de taxa local ao processo. Não representa a infraestrutura completa de RPA. Observabilidade, recuperação de contas, isolamento do parser e política operacional continuam necessários para uso além de uma demonstração controlada.
 
 Referências: https://render.com/docs/free e https://render.com/docs/blueprint-spec.

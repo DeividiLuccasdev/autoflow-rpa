@@ -2,6 +2,8 @@
 
 Plataforma de portfólio para automação financeira com documentos e empresas fictícios.
 
+A demonstração é pública. A [área privada](https://autoflow-rpa-api.onrender.com/workspace) oferece acesso por convite, sessões revogáveis e documentos separados por usuário. Veja [como emitir um convite e ativar uma conta](docs/accounts.md).
+
 ## Rodar todos os testes
 
 Com Python e Docker Desktop funcionando, execute na raiz:
@@ -33,7 +35,7 @@ O arquivo .env da raiz já foi gerado localmente com uma chave aleatória e est�
 python -c "import secrets; from pathlib import Path; p=Path('.env'); assert not p.exists(), 'Arquivo ja existe'; p.write_text('AUTOFLOW_API_KEY='+secrets.token_hex(32)+'\n', encoding='utf-8')"
 ```
 
-Abra http://localhost:8000/docs e use **Authorize** para informar a chave AUTOFLOW_API_KEY do arquivo .env. Todas as rotas /api/v1 exigem X-API-Key; health e documentação são públicos. Sem chave configurada, as rotas protegidas retornam 503. Credencial inválida retorna 401. Essa é uma credencial única de operador para demonstração: não há usuários individuais, RBAC ou isolamento por empresa. A auditoria distingue local-operator, worker e legacy-unknown; isso não identifica uma pessoa.
+Abra http://localhost:8000/workspace para emitir convite, ativar uma conta e entrar. As rotas /api/v1 aceitam sessão individual com proteção CSRF nas escritas, ou X-API-Key para o acervo legado. No Swagger, **Authorize** informa essa chave operacional. Health e documentação são públicos. A auditoria de novas notas identifica o usuário; os marcadores local-operator, worker e legacy-unknown conservam seus significados operacionais. Não há RBAC de organizações nesta etapa.
 
 ## Docker
 
@@ -41,7 +43,6 @@ Com Docker Desktop em modo Linux e o .env configurado:
 
 ```powershell
 docker compose up --build -d
-docker compose run --rm api python -m pytest -q
 docker compose down
 ```
 
@@ -81,33 +82,33 @@ Estados: queued, completed, needs_review, duplicate e failed. processing ocorre 
 
 ## Testes
 
-Execute na pasta backend:
+Execute na raiz, em infraestrutura exclusiva de teste:
 
 ```powershell
-.venv\Scripts\python -m pytest -q
+python scripts/test_all.py
 ```
 
 Os testes de concorrência exigem TEST_POSTGRES_URL apontando para um banco de testes. Criam e removem apenas schemas isolados com nomes aleatórios test_*. Não aponte para banco de produção. O workflow GitHub Actions fornece PostgreSQL e executa esses testes. Casos: upload simultâneo do mesmo documento, dois workers na mesma execução, documentos distintos da mesma nota e dois dispatchers concorrentes.
 
-Verificação em 01/11/2026: 40 testes passaram, sem skips, usando SQLite e uma instância temporária PostgreSQL 18. Migrações foram verificadas nos dois bancos; o SQLite local foi atualizado até 0003. pip check e validação do Compose passaram. Docker/Redis/Celery ainda não foram executados juntos neste ambiente. Existe um aviso de depreciação no adaptador de testes Starlette/httpx, sem falhas de teste.
+Resultados anteriores e detalhes do ambiente: [127 testes da primeira bateria](docs/test-results.md). A entrega de contas adiciona testes de autorização e usa a migração 0004. PostgreSQL, Redis, Celery e Chromium são executados no CI. Existe um aviso de depreciação no adaptador de testes Starlette/httpx.
 
 ## Integração contínua
 
-O workflow `.github/workflows/ci.yml` executa testes com PostgreSQL, verifica dependências e, após os testes passarem, constrói a imagem Docker. Dispara por push, pull request ou manualmente. Usa permissões de leitura, limite de duração e cancelamento de execuções substituídas. Não publica imagens nem faz deploy: CD continua pendente da escolha do ambiente de hospedagem. A primeira execução no GitHub precisa ser confirmada depois do envio do código.
+O workflow `.github/workflows/ci.yml` executa testes completos com PostgreSQL, Redis, Celery e Chromium, audita dependências e constrói a imagem Docker. Dispara por push, pull request ou manualmente. O Render acompanha a branch main e está configurado para publicar após os checks passarem. O comando de início aplica as migrations antes de iniciar a API.
 
 ## Próximos passos
 
-Validar integração real Redis/Celery, adicionar reenvio operacional autorizado e métricas de falha. Depois, criar ERPs simulados e confirmar cada ação externa antes de repetir. Frontend Next.js, usuários individuais/permissões, OCR e IA continuam pendentes. Este incremento permanece destinado ao ambiente local com dados fictícios.
+Adicionar recuperação de conta, métricas de falha e reenvio operacional autorizado. Integrações empresariais externas, organizações/RBAC, frontend Next.js, OCR e IA continuam pendentes. O produto permanece destinado a dados fictícios de portfólio.
 
 ## Interface para recrutadores
 
-A página inicial agora apresenta um dashboard responsivo, com visual escuro, filtros, busca, detalhes de validação e demonstração pública. Os indicadores e registros iniciais são ilustrativos e estão identificados na interface. O PDF sintético fornecido em /demo/sample é o único documento aceito em /demo/analyze: a comparação de SHA-256 acontece antes da extração. A resposta usa o extrator real, mas não grava notas ou documentos no banco. Histórico da demonstração é mantido na sessão do navegador. As rotas /api/v1 continuam exigindo chave. A interface desta entrega usa HTML, CSS e JavaScript servidos pelo FastAPI; Next.js permanece no roadmap. O repositório GitHub permanece privado.
+A página inicial apresenta um dashboard responsivo, com visual escuro, filtros, busca e demonstração pública. Os indicadores e registros iniciais são ilustrativos. O PDF sintético de /demo/sample é o único aceito em /demo/analyze, verificado por SHA-256 antes da extração, sem gravar no banco. A área /workspace oferece acesso individual aos dados persistidos. A interface usa HTML, CSS e JavaScript servidos pelo FastAPI; Next.js permanece no roadmap. O repositório GitHub permanece privado.
 
 ## Automação demonstrativa entre sistemas
 
 O botão Ver automação em ação abre uma execução de seis etapas no backend: extrair PDF, consultar uma conta a pagar fixa, conferir o valor, criar um lançamento no adaptador de destino, consultar novamente esse lançamento e concluir os eventos de auditoria. Cada etapa exige uma requisição à API com a versão esperada; reenvios concorrentes da mesma versão não avançam duas vezes. A segunda execução na mesma sessão bloqueia o lançamento duplicado e conserva o protocolo original.
 
-Os dois ERPs são adaptadores simulados dentro do processo Python, não serviços empresariais externos. O estado fica somente em memória por até 15 minutos, limitado a 128 sessões e cinco execuções por sessão. Sessões antigas podem ser removidas ao atingir o limite; reiniciar o processo apaga a demonstração. Não há pagamentos, dados reais ou gravação no PostgreSQL nesse fluxo público. O lock é por processo e este modo exige um único worker HTTP, como já configurado no Render. A interface adiciona o resultado ao histórico da sessão e apresenta eventos com horários e protocolo. A pausa visual entre etapas apenas facilita a leitura dos resultados já executados. Automação de navegador com Playwright continua pendente.
+Os dois ERPs públicos são adaptadores simulados dentro do processo Python. O estado fica em memória por até 15 minutos, limitado a 128 sessões e cinco execuções por sessão. Ao atingir a capacidade, novas sessões são recusadas sem expulsar sessões ativas. Reiniciar o processo apaga a demonstração. Não há pagamentos nem gravação no PostgreSQL nesse fluxo público. O lock é por processo e exige um único worker HTTP, como configurado no Render. A interface apresenta eventos e protocolo. O robô Playwright separado funciona localmente e no CI, conforme a seção seguinte.
 
 ## Robô Playwright
 

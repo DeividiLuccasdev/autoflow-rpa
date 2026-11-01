@@ -70,6 +70,6 @@ O runner recusa hosts externos e nomes de banco sem sufixo `_test`; exige Redis 
 
 ## Limites de produto
 
-Não existem cadastro de usuários, login individual, checkout, gateway, webhook de pagamento, estoque ou planos. Não há teste fictício afirmando cobertura desses fluxos. A chave compartilhada permite acesso operacional global; não oferece separação de notas financeiras entre usuários A e B. O isolamento A/B testado corresponde somente às sessões públicas da demonstração. Implementar contas e autorização por proprietário exige definir esse comportamento antes de novos testes.
+O escopo inicial desta bateria não incluía usuários. A etapa seguinte, aprovada pelo responsável pelo produto, adicionou [contas por convite e isolamento financeiro](accounts.md), com novos request specs em `test_accounts_requests.py`. A chave operacional agora acessa somente o acervo legado. Checkout, gateway, webhook de pagamento, estoque e planos continuam fora do produto; não há teste fictício afirmando cobertura desses fluxos.
 
 Nenhum E2E novo foi adicionado. O E2E Playwright existente é executado integralmente. Bugs reais encontrados devem permanecer falhando e ser registrados; expectativas não devem ser alteradas sem validação do responsável pelo produto.
