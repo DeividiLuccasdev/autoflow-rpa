@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autoflow
+      POSTGRES_PASSWORD: local_demo_only
+      POSTGRES_DB: autoflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://autoflow:local_demo_only@db:5432/autoflow
+      AUTOFLOW_API_KEY: ${AUTOFLOW_API_KEY:?Configure AUTOFLOW_API_KEY no arquivo .env}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    mem_limit: 512m
+    cpus: 1.0
+    security_opt:
+      - no-new-privileges:true
+  migrate:
+    build: ./backend
+    command: python -m alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+psycopg://autoflow:local_demo_only@db:5432/autoflow
+    depends_on:
+      db:
+        condition: service_healthy
+  worker:
+    build: ./backend
+    command: celery -A app.worker:celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50
+    mem_limit: 512m
+    cpus: 1.0
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg://autoflow:local_demo_only@db:5432/autoflow
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+  scheduler:
+    build: ./backend
+    command: celery -A app.worker:celery_app beat --loglevel=info
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+volumes:
+  postgres_data:
