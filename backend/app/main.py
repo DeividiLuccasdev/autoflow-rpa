@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 import hashlib
+import os
 from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .db import get_db
@@ -26,6 +27,15 @@ app.add_middleware(BodyLimitMiddleware)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/ready")
+def readiness(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        db.execute(select(Invoice.id).limit(1))
+    except Exception:
+        raise HTTPException(503, "Banco indisponível ou migração pendente")
+    return {"status": "ready"}
 
 @router.post("/api/v1/invoices", response_model=InvoiceRead, status_code=201)
 def create_invoice(payload: InvoiceCreate, db: Session = Depends(get_db)):
@@ -79,6 +89,8 @@ def invoice_events(invoice_id: str, db: Session = Depends(get_db)):
 @router.post("/api/v1/executions", response_model=ExecutionRead, status_code=202)
 def submit_execution(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
+        if os.getenv("AUTOFLOW_ASYNC_ENABLED", "true").lower() != "true":
+            raise HTTPException(503, "Fila desativada nesta demonstração; use /api/v1/invoices/upload")
         if file.content_type != "application/pdf":
             raise HTTPException(415, "Envie um arquivo application/pdf")
         content = file.file.read(MAX_BYTES + 1)

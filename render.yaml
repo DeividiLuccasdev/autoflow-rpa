@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: autoflow-rpa-api
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /ready
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: AUTOFLOW_ASYNC_ENABLED
+        value: "false"
+      - key: AUTOFLOW_API_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: autoflow-rpa-db
+          property: connectionString
+databases:
+  - name: autoflow-rpa-db
+    plan: free
+    region: oregon
+    databaseName: autoflow
+    user: autoflow
+    ipAllowList: []
