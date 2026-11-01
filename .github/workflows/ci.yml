@@ -48,3 +48,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build --tag autoflow-backend:ci ./backend
+  rpa-browser:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install "pip>=26.2,<27"
+      - run: pip install -r requirements-rpa.txt
+      - run: pip install pip-audit
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m pip_audit --local
+      - run: mkdir -p ../rpa-evidence
+      - run: python -m pytest -q tests/test_rpa_browser.py --basetemp=../rpa-evidence/ci
+        env:
+          RUN_RPA_TESTS: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rpa-browser-evidence
+          path: |
+            rpa-evidence/ci/**/*.png
+            rpa-evidence/ci/**/*.json
+            rpa-evidence/ci/**/*.zip
+            rpa-evidence/ci/**/*.webm
