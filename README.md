@@ -88,3 +88,7 @@ O workflow `.github/workflows/ci.yml` executa testes com PostgreSQL, verifica de
 ## Próximos passos
 
 Validar integração real Redis/Celery, adicionar reenvio operacional autorizado e métricas de falha. Depois, criar ERPs simulados e confirmar cada ação externa antes de repetir. Frontend Next.js, usuários individuais/permissões, OCR e IA continuam pendentes. Este incremento permanece destinado ao ambiente local com dados fictícios.
+
+## Interface para recrutadores
+
+A página inicial agora apresenta um dashboard responsivo, com visual escuro, filtros, busca, detalhes de validação e demonstração pública. Os indicadores e registros iniciais são ilustrativos e estão identificados na interface. O PDF sintético fornecido em /demo/sample é o único documento aceito em /demo/analyze: a comparação de SHA-256 acontece antes da extração. A resposta usa o extrator real, mas não grava notas ou documentos no banco. Histórico da demonstração é mantido na sessão do navegador. As rotas /api/v1 continuam exigindo chave. A interface desta entrega usa HTML, CSS e JavaScript servidos pelo FastAPI; Next.js permanece no roadmap. O repositório GitHub permanece privado.

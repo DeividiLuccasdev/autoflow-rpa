@@ -13,6 +13,8 @@ from .schemas import AuditRead, ExecutionRead, InvoiceCreate, InvoiceRead
 from .security import require_api_key
 from .integrity import is_duplicate
 from .limits import BodyLimitMiddleware
+from .demo import router as demo_router, ASSETS
+from fastapi.staticfiles import StaticFiles
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
@@ -114,3 +116,5 @@ def get_execution(execution_id: str, db: Session = Depends(get_db)):
     return execution
 
 app.include_router(router)
+app.include_router(demo_router)
+app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
