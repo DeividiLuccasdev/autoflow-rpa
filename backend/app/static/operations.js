@@ -29,7 +29,7 @@ function renderSession(data) {
   $('session-duration').textContent = m.average_completed_seconds === null ? '—' : m.average_completed_seconds.toLocaleString('pt-BR', {maximumFractionDigits:1}) + ' s';
   $('session-volume').textContent = currency(Number(m.registered_amount));
   $('session-budget').textContent = `${data.remaining_runs} de 5 execuções disponíveis · sessão temporária de até 15 minutos`;
-  $('session-total').textContent = `${m.total} execuções · ${m.rejected} rejeitadas`;
+  $('session-total').textContent = `${m.total} ${m.total === 1 ? 'execução' : 'execuções'} · ${m.rejected} ${m.rejected === 1 ? 'rejeitada' : 'rejeitadas'}`;
   $('session-error').textContent = '';
   $('session-runs').innerHTML = data.runs.length ? data.runs.map(run => `<article class="session-run"><div><strong>Nota ${escapeHTML(run.invoice?.number || (run.scenario === 'divergence' ? '43' : '42'))} · ${scenarioLabels[run.scenario]}</strong><small>${escapeHTML(run.id.slice(0,8))} · ${run.step}/6 etapas</small></div><span class="operation-status ${run.status}">${statusLabels[run.status]}</span><button type="button" class="text-button" data-operation-id="${escapeHTML(run.id)}">${run.status === 'needs_review' ? 'Revisar e decidir' : run.status === 'running' ? 'Retomar execução' : 'Ver evidências'} ↗</button></article>`).join('') : '<div class="session-empty">Sua sessão ainda não tem execuções. Escolha um cenário abaixo e acompanhe cada etapa.</div>';
   document.querySelectorAll('[data-operation-id]').forEach(button => button.onclick = () => {
@@ -49,7 +49,7 @@ function renderOperation(run) {
   const events = run?.events || [];
   $('automation-steps').innerHTML = operationLabels.map((label,index) => {
     const item = events.find(event => event.step === index && event.kind !== 'review');
-    const waiting = index === 2 && run?.status === 'needs_review';
+    const waiting = (index === 2 && run?.status === 'needs_review') || (index === 3 && run?.status === 'duplicate');
     return `<div class="automation-step ${waiting ? 'waiting' : item ? 'done' : run?.step === index && run.status === 'running' ? 'active' : ''}"><span>${waiting ? '!' : item ? '✓' : String(index+1).padStart(2,'0')}</span><div>${label}${item ? `<small>${escapeHTML(item.message)}</small>` : ''}</div></div>`;
   }).join('');
   const divergence = (run?.scenario || selectedScenario) === 'divergence';

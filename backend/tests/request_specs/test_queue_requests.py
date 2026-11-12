@@ -4,6 +4,8 @@ from celery import Celery
 from sqlalchemy import text
 from helpers import pdf,upload,counts,payload,simultaneous
 from conftest import wait_execution
+from time import monotonic, sleep
+from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 
 def submit(spec,content=None):
     response=upload(spec["http"],content or pdf(),path="/api/v1/executions")
@@ -29,7 +31,17 @@ def test_quando_redis_indisponivel_entao_preserva_e_processa_apos_recuperacao(li
     spec["redis"].execute_command("CLIENT", "PAUSE", 5000, "ALL")
     run = submit(spec)
     assert run["status"] == "queued" and counts(spec) == [0, 0, 0, 1]
-    spec["redis"].ping()  # Aguarda a retomada automática do serviço real.
+    # CLIENT PAUSE (5s) pode ultrapassar o timeout do cliente Redis.
+    # Sonda a recuperação real com prazo limitado, sem substituir o broker.
+    deadline = monotonic() + 12
+    while True:
+        try:
+            assert spec["redis"].ping()
+            break
+        except (RedisConnectionError, RedisTimeoutError):
+            if monotonic() >= deadline:
+                raise
+            sleep(0.1)
     spec["start_queue"]()
     wait_execution(spec["http"], run["id"], {"completed"})
     assert counts(spec) == [1, 1, 2, 1]
