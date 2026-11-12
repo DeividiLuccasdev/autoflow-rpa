@@ -100,6 +100,26 @@ O workflow `.github/workflows/ci.yml` executa testes completos com PostgreSQL, R
 
 Adicionar recuperação de conta, métricas de falha e reenvio operacional autorizado. Integrações empresariais externas, organizações/RBAC, frontend Next.js, OCR e IA continuam pendentes. O produto permanece destinado a dados fictícios de portfólio.
 
+## Central de execuções e revisão humana
+
+A interface pública oferece três cenários com transições confirmadas no backend:
+
+- **Sucesso:** extrai a nota fictícia 42, confere R$ 123,45, registra no adaptador de destino e confirma o protocolo.
+- **Divergência:** extrai a nota fictícia 43, de R$ 123,45, e compara com R$ 150,00 na origem simulada. O fluxo para antes do lançamento. O visitante pode corrigir o valor da origem e aprovar, ou rejeitar. Uma justificativa de 10 a 300 caracteres é obrigatória e fica na auditoria.
+- **Duplicidade:** exige um lançamento de referência. Após concluir o sucesso, reenvia a nota 42 e bloqueia um novo registro, conservando o protocolo original.
+
+A central lista as execuções da sessão e permite consultar evidências, revisar pendências ou retomar uma execução interrompida. A auditoria pode ser baixada em JSON. Os indicadores contam conclusões, pendências e duplicidades reais da sessão demonstrativa; o valor registrado soma lançamentos únicos, e o tempo médio considera apenas execuções concluídas, incluindo espera por revisão. Sem conclusões, o tempo aparece como indisponível. O histórico de exemplos permanece separado e identificado como ilustrativo.
+
+Rotas adicionais, com `X-Demo-Session` UUID:
+
+- `GET /demo/automation/summary`: execuções, métricas e orçamento restante da sessão.
+- `POST /demo/automation/runs?scenario=success|divergence|duplicate`: cria uma execução.
+- `POST /demo/automation/runs/{id}/review`: decisão com `action`, `expected_step`, `reason` e, para aprovar, `corrected_source_amount` igual ao valor da nota.
+
+Revisões só são aceitas para a sessão proprietária e na etapa de divergência. Decisões repetidas, concorrentes ou fora de etapa são recusadas sem repetir efeitos. A nota 43 é uma fixture sintética versionada, gerada por `scripts/create_divergence_sample.py`.
+
+O limite continua sendo cinco execuções por sessão, até 128 sessões e TTL de 15 minutos desde a criação. O estado é volátil e por processo, requer um único worker HTTP e desaparece ao reiniciar o serviço. Revisões representam decisões demonstrativas do visitante da sessão, não aprovação empresarial autenticada. Esta entrega não adiciona OCR, IA, processamento em lote, Power Automate nem integração com ERP real.
+
 ## Interface para recrutadores
 
 A página inicial apresenta um dashboard responsivo, com visual escuro, filtros, busca e demonstração pública. Os indicadores e registros iniciais são ilustrativos. O PDF sintético de /demo/sample é o único aceito em /demo/analyze, verificado por SHA-256 antes da extração, sem gravar no banco. A área /workspace oferece acesso individual aos dados persistidos. A interface usa HTML, CSS e JavaScript servidos pelo FastAPI; Next.js permanece no roadmap. O repositório GitHub permanece privado.
