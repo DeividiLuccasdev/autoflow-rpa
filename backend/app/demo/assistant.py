@@ -14,12 +14,12 @@ from time import monotonic
 
 import pymupdf
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import is_secure
 from ..security import password_hash, verify_password
-from .pages import ASSETS
+from .pages import html_page
 
 router = APIRouter(include_in_schema=False)
 sessions = OrderedDict()
@@ -205,7 +205,7 @@ class Query(BaseModel):
 
 @router.get("/assistente")
 def page():
-    return FileResponse(ASSETS / "assistant.html")
+    return HTMLResponse(html_page("assistant.html"))
 
 
 @router.post("/assistant/login")

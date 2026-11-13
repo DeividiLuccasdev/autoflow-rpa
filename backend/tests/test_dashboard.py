@@ -29,3 +29,18 @@ def test_demo_extracts_only_approved_sample_without_persistence(client):
         == 422
     )
     assert http.post("/demo/analyze", files={"file": ("big.pdf", b"x" * 65537, "application/pdf")}).status_code == 413
+
+
+def test_pages_version_assets_by_content_hash(client):
+    import hashlib
+    import re
+
+    from app.config import STATIC_DIR
+
+    http, _ = client
+    for path, asset in [("/", "app.js"), ("/workspace", "workspace.js"), ("/assistente", "assistant.js")]:
+        html = http.get(path).text
+        expected = hashlib.sha256((STATIC_DIR / asset).read_bytes()).hexdigest()[:10]
+        assert f"/assets/{asset}?v={expected}" in html
+        # Nenhuma referência local fica sem versão.
+        assert not re.search(r"/assets/[\w.-]+\.(?:css|js)(?!\?v=)", html)
