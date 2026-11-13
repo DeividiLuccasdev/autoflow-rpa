@@ -1,15 +1,20 @@
 """Parser estrito do formato fictício AutoFlow; não interpreta DANFE real."""
-from decimal import Decimal
+
 import re
+from decimal import Decimal
+
 import pymupdf
 from pydantic import ValidationError
+
 from .schemas import InvoiceCreate
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PAGES = 10
 
+
 class DocumentError(ValueError):
     pass
+
 
 def extract_invoice(content: bytes) -> InvoiceCreate:
     if not content.startswith(b"%PDF-"):

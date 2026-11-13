@@ -1,4 +1,6 @@
 """Reconhece somente as restrições únicas que representam duplicidade."""
+
+
 def is_duplicate(exc, table, columns, constraint=None):
     original = exc.orig
     # PostgreSQL: SQLSTATE e nome exato da restrição, nunca texto livre.

@@ -1,5 +1,3 @@
-from test_invoices import client
-
 def test_auth_required_and_wrong_key(client):
     http, _ = client
     del http.headers["X-API-Key"]
@@ -9,9 +7,11 @@ def test_auth_required_and_wrong_key(client):
     assert http.get("/api/v1/invoices", headers={"X-API-Key": "wrong"}).status_code == 401
     assert http.get("/health").status_code == 200
 
+
 def test_missing_configuration_fails_closed(client, monkeypatch):
     monkeypatch.delenv("AUTOFLOW_API_KEY")
     assert client[0].get("/api/v1/invoices").status_code == 503
+
 
 def test_body_limit_before_multipart(client):
     response = client[0].post("/api/v1/executions", content=b"x" * (6 * 1024 * 1024))

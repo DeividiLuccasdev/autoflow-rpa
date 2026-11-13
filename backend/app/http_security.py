@@ -1,12 +1,16 @@
 """Proteções HTTP e limites locais para o demo de um único processo."""
+
 from collections import OrderedDict, deque
 from threading import Lock
 from time import monotonic
-import os
+
 from fastapi import HTTPException
-from starlette.responses import JSONResponse
-from .security import authenticate_scope
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import JSONResponse
+
+from .config import settings
+from .security import authenticate_scope
+
 
 class SlidingLimiter:
     def __init__(self):
@@ -37,7 +41,9 @@ class SlidingLimiter:
             values.append(now)
             return True
 
+
 limiter = SlidingLimiter()
+
 
 class HttpSecurityMiddleware:
     def __init__(self, app):
@@ -48,6 +54,7 @@ class HttpSecurityMiddleware:
             return await self.app(scope, receive, send)
         path = scope["path"]
         headers = dict(scope.get("headers", []))
+
         async def protected_send(message):
             if message["type"] == "http.response.start":
                 values = list(message.get("headers", []))
@@ -55,14 +62,28 @@ class HttpSecurityMiddleware:
                 swagger = path in {"/docs", "/redoc", "/docs/oauth2-redirect"}
                 script = "'self' https://cdn.jsdelivr.net 'unsafe-inline'" if swagger else "'self'"
                 csp = f"default-src 'self'; script-src {script}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
-                values.extend([(b"content-security-policy", csp.encode()), (b"x-frame-options", b"DENY"),
-                               (b"x-content-type-options", b"nosniff"), (b"referrer-policy", b"no-referrer"),
-                               (b"permissions-policy", b"camera=(), microphone=(self), geolocation=()" if path == "/assistente" else b"camera=(), microphone=(), geolocation=()")])
-                if path.startswith(("/api/", "/demo/", "/auth/", "/assistant/")) or path in {"/workspace", "/assistente"}:
+                values.extend(
+                    [
+                        (b"content-security-policy", csp.encode()),
+                        (b"x-frame-options", b"DENY"),
+                        (b"x-content-type-options", b"nosniff"),
+                        (b"referrer-policy", b"no-referrer"),
+                        (
+                            b"permissions-policy",
+                            b"camera=(), microphone=(self), geolocation=()"
+                            if path == "/assistente"
+                            else b"camera=(), microphone=(), geolocation=()",
+                        ),
+                    ]
+                )
+                if path.startswith(("/api/", "/demo/", "/auth/", "/assistant/")) or path in {
+                    "/workspace",
+                    "/assistente",
+                }:
                     values.append((b"cache-control", b"no-store"))
                 elif path == "/":
                     values.append((b"cache-control", b"no-cache"))
-                if scope.get("scheme") == "https" or os.getenv("RENDER") == "true":
+                if scope.get("scheme") == "https" or settings.behind_https_proxy:
                     values.append((b"strict-transport-security", b"max-age=31536000"))
                 message = {**message, "headers": values}
             await send(message)
@@ -81,7 +102,11 @@ class HttpSecurityMiddleware:
         elif path.startswith(("/demo/automation/", "/demo/batches/")):
             group, maximum = "demo-advance", 90
         if group and not limiter.allow(peer, group, maximum):
-            return await JSONResponse({"detail": "Limite temporário de requisições; aguarde um minuto"}, status_code=429, headers={"Retry-After": "60"})(scope, receive, protected_send)
+            return await JSONResponse(
+                {"detail": "Limite temporário de requisições; aguarde um minuto"},
+                status_code=429,
+                headers={"Retry-After": "60"},
+            )(scope, receive, protected_send)
 
         # Autentica antes de receber e armazenar corpos de uploads privados.
         if path.startswith("/api/v1/") or path in {"/auth/me", "/auth/logout", "/auth/invitations"}:
@@ -89,17 +114,22 @@ class HttpSecurityMiddleware:
                 identity = await run_in_threadpool(authenticate_scope, scope, headers)
                 scope.setdefault("state", {})["identity"] = identity
             except HTTPException as exc:
-                return await JSONResponse({"detail": exc.detail}, status_code=exc.status_code)(scope, receive, protected_send)
+                return await JSONResponse({"detail": exc.detail}, status_code=exc.status_code)(
+                    scope, receive, protected_send
+                )
         if scope["method"] in {"POST", "PUT", "PATCH", "DELETE"}:
             origin = headers.get(b"origin")
             host = headers.get(b"host", b"")
             if origin:
                 from urllib.parse import urlsplit
+
                 try:
                     parsed = urlsplit(origin.decode("latin-1"))
                     allowed = parsed.netloc.encode("latin-1") == host and parsed.scheme in {"https", "http"}
                 except ValueError:
                     allowed = False
                 if not allowed:
-                    return await JSONResponse({"detail": "Origem não permitida"}, status_code=403)(scope, receive, protected_send)
+                    return await JSONResponse({"detail": "Origem não permitida"}, status_code=403)(
+                        scope, receive, protected_send
+                    )
         await self.app(scope, receive, protected_send)

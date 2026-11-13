@@ -1,7 +1,7 @@
-from pathlib import Path
 from sqlalchemy import select
+
 from app.models import Invoice
-from test_invoices import client
+
 
 def test_public_dashboard_and_assets(client):
     http, _ = client
@@ -13,6 +13,7 @@ def test_public_dashboard_and_assets(client):
     assert http.get("/demo/sample").content.startswith(b"%PDF-")
     assert http.get("/api/v1/invoices").status_code == 401
 
+
 def test_demo_extracts_only_approved_sample_without_persistence(client):
     http, factory = client
     del http.headers["X-API-Key"]
@@ -23,5 +24,8 @@ def test_demo_extracts_only_approved_sample_without_persistence(client):
     assert response.json()["persisted"] is False
     with factory() as db:
         assert db.scalar(select(Invoice)) is None
-    assert http.post("/demo/analyze", files={"file": ("fake.pdf", b"%PDF-untrusted", "application/pdf")} ).status_code == 422
-    assert http.post("/demo/analyze", files={"file": ("big.pdf", b"x" * 65537, "application/pdf")} ).status_code == 413
+    assert (
+        http.post("/demo/analyze", files={"file": ("fake.pdf", b"%PDF-untrusted", "application/pdf")}).status_code
+        == 422
+    )
+    assert http.post("/demo/analyze", files={"file": ("big.pdf", b"x" * 65537, "application/pdf")}).status_code == 413

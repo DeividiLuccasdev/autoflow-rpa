@@ -1,7 +1,9 @@
+import re
 from datetime import datetime
 from decimal import Decimal
-import re
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 class InvoiceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -18,9 +20,12 @@ class InvoiceCreate(BaseModel):
         digits = re.sub(r"\D", "", value)
         if len(digits) != 14 or len(set(digits)) == 1:
             raise ValueError("CNPJ inválido")
-        for length, weights in [(12, [5,4,3,2,9,8,7,6,5,4,3,2]), (13, [6,5,4,3,2,9,8,7,6,5,4,3,2])]:
-            remainder = sum(int(n)*w for n, w in zip(digits[:length], weights)) % 11
-            if int(digits[length]) != (0 if remainder < 2 else 11-remainder):
+        for length, weights in [
+            (12, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]),
+            (13, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]),
+        ]:
+            remainder = sum(int(n) * w for n, w in zip(digits[:length], weights, strict=True)) % 11
+            if int(digits[length]) != (0 if remainder < 2 else 11 - remainder):
                 raise ValueError("Dígitos verificadores do CNPJ inválidos")
         return digits
 
@@ -29,11 +34,13 @@ class InvoiceCreate(BaseModel):
     def normalize_identifier(cls, value: str) -> str:
         return str(int(value))
 
+
 class InvoiceRead(InvoiceCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str
     status: str
     created_at: datetime
+
 
 class AuditRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -41,6 +48,7 @@ class AuditRead(BaseModel):
     event: str
     actor: str
     created_at: datetime
+
 
 class ExecutionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -104,13 +104,19 @@ Sobe PostgreSQL, Redis, Celery e Chromium em containers descartáveis, executa a
 
 Mais de 200 testes cobrem cadastro e upload, concorrência no PostgreSQL, entrega duplicada pelo broker, Redis indisponível, tentativas esgotadas, isolamento entre usuários, políticas HTTP, demonstrações e o robô de navegador. → [comportamentos cobertos](docs/request-specs.md)
 
-O CI (GitHub Actions) roda a suíte completa, audita dependências, constrói a imagem Docker e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
+Lint e formatação usam [ruff](https://docs.astral.sh/ruff/) (`ruff check .` e `ruff format .` na raiz; há um hook opcional de [pre-commit](https://pre-commit.com/)).
+
+O CI (GitHub Actions) verifica lint e formatação, roda a suíte completa, audita dependências, constrói a imagem Docker e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
 
 ## Estrutura
 
 ```text
 backend/
-├── app/            # API FastAPI, regras de negócio, demonstrações e frontend estático
+├── app/
+│   ├── api/        # rotas privadas: contas, notas e execuções
+│   ├── demo/       # demonstrações públicas (automação, lotes, assistente)
+│   ├── static/     # frontend HTML, CSS e JS
+│   └── *.py        # configuração, modelos, segurança, extração de PDF, fila e worker
 ├── migrations/     # Alembic
 ├── rpa/            # robô Playwright
 ├── simulators/     # ERP fictício operado pelo robô

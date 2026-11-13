@@ -2,8 +2,9 @@
 
 Estado limitado em memória; requer um único processo HTTP, como no Render.
 """
+
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from threading import RLock
 from time import monotonic
@@ -12,8 +13,9 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from .demo import SAMPLE
-from .documents import extract_invoice
+
+from ..documents import extract_invoice
+from .pages import SAMPLE
 
 router = APIRouter(prefix="/demo/automation", include_in_schema=False)
 lock = RLock()
@@ -21,7 +23,14 @@ sessions = OrderedDict()
 TTL = 900
 MAX_SESSIONS = 128
 MAX_RUNS = 5
-STEPS = ["Extrair documento", "Consultar ERP de origem", "Conferir valores", "Registrar no ERP de destino", "Confirmar o lançamento", "Concluir auditoria"]
+STEPS = [
+    "Extrair documento",
+    "Consultar ERP de origem",
+    "Conferir valores",
+    "Registrar no ERP de destino",
+    "Confirmar o lançamento",
+    "Concluir auditoria",
+]
 
 
 def context(session_id, create=False):
@@ -44,28 +53,45 @@ def identity(run):
 
 
 def event(run, step, title, message, kind="step"):
-    run["events"].append({"step": step, "title": title, "message": message,
-                          "kind": kind, "time": datetime.now(timezone.utc).isoformat()})
+    run["events"].append(
+        {"step": step, "title": title, "message": message, "kind": kind, "time": datetime.now(UTC).isoformat()}
+    )
 
 
 def snapshot(state, run):
     ledger = state["ledger"].get(identity(run))
-    return {"id": run["id"], "scenario": run["scenario"], "status": run["status"],
-            "step": run["step"], "steps": STEPS, "events": list(run["events"]),
-            "source": {"name": "NovaTech ERP · origem", "order": "CP-2026-0043" if run["scenario"] == "divergence" else "CP-2026-0042",
-                       "amount": str(run.get("source_amount", Decimal("150.00") if run["scenario"] == "divergence" else Decimal("123.45"))),
-                       "status": "Revisão necessária" if run["status"] == "needs_review" else "Cenário de demonstração"},
-            "destination": {"name": "Orbit Finance · destino", "entries": 1 if ledger else 0,
-                            "protocol": ledger["protocol"] if ledger else None,
-                            "amount": ledger["amount"] if ledger else None},
-            "invoice": run.get("invoice"), "temporary": True,
-            "elapsed_seconds": round(max(0, run.get("finished", monotonic()) - run["started"]), 3),
-            "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"])))}
+    return {
+        "id": run["id"],
+        "scenario": run["scenario"],
+        "status": run["status"],
+        "step": run["step"],
+        "steps": STEPS,
+        "events": list(run["events"]),
+        "source": {
+            "name": "NovaTech ERP · origem",
+            "order": "CP-2026-0043" if run["scenario"] == "divergence" else "CP-2026-0042",
+            "amount": str(
+                run.get("source_amount", Decimal("150.00") if run["scenario"] == "divergence" else Decimal("123.45"))
+            ),
+            "status": "Revisão necessária" if run["status"] == "needs_review" else "Cenário de demonstração",
+        },
+        "destination": {
+            "name": "Orbit Finance · destino",
+            "entries": 1 if ledger else 0,
+            "protocol": ledger["protocol"] if ledger else None,
+            "amount": ledger["amount"] if ledger else None,
+        },
+        "invoice": run.get("invoice"),
+        "temporary": True,
+        "elapsed_seconds": round(max(0, run.get("finished", monotonic()) - run["started"]), 3),
+        "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"]))),
+    }
 
 
 @router.post("/runs", status_code=201)
-def create_run(x_demo_session: UUID = Header(...),
-               scenario: Literal["success", "divergence", "duplicate"] = Query("success")):
+def create_run(
+    x_demo_session: UUID = Header(...), scenario: Literal["success", "divergence", "duplicate"] = Query("success")
+):
     # Valores default também suportam os testes diretos, sem resolução do FastAPI.
     if not isinstance(scenario, str):
         scenario = "success"
@@ -75,8 +101,14 @@ def create_run(x_demo_session: UUID = Header(...),
             raise HTTPException(409, "Conclua primeiro o cenário de sucesso para testar a duplicidade")
         if len(state["runs"]) >= MAX_RUNS:
             raise HTTPException(429, "Limite de cinco demonstrações nesta sessão temporária")
-        run = {"id": str(uuid4()), "scenario": scenario, "step": 0, "status": "running",
-               "events": [], "started": monotonic()}
+        run = {
+            "id": str(uuid4()),
+            "scenario": scenario,
+            "step": 0,
+            "status": "running",
+            "events": [],
+            "started": monotonic(),
+        }
         state["runs"][run["id"]] = run
         return snapshot(state, run)
 
@@ -87,15 +119,27 @@ def summary(x_demo_session: UUID = Header(...)):
         state = context(x_demo_session, create=True)
         runs = list(state["runs"].values())
         completed = [r for r in runs if r["status"] == "completed"]
-        return {"runs": [snapshot(state, run) for run in reversed(runs)],
-                "metrics": {"total": len(runs), "completed": len(completed),
-                            "needs_review": sum(r["status"] == "needs_review" for r in runs),
-                            "duplicate": sum(r["status"] == "duplicate" for r in runs),
-                            "rejected": sum(r["status"] == "rejected" for r in runs),
-                            "registered_amount": str(sum((Decimal(e["amount"]) for e in state["ledger"].values()), Decimal("0.00"))),
-                            "average_completed_seconds": round(sum(r["finished"] - r["started"] for r in completed) / len(completed), 3) if completed else None},
-                "remaining_runs": MAX_RUNS - len(runs), "temporary": True,
-                "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"])))}
+        return {
+            "runs": [snapshot(state, run) for run in reversed(runs)],
+            "metrics": {
+                "total": len(runs),
+                "completed": len(completed),
+                "needs_review": sum(r["status"] == "needs_review" for r in runs),
+                "duplicate": sum(r["status"] == "duplicate" for r in runs),
+                "rejected": sum(r["status"] == "rejected" for r in runs),
+                "registered_amount": str(
+                    sum((Decimal(e["amount"]) for e in state["ledger"].values()), Decimal("0.00"))
+                ),
+                "average_completed_seconds": round(
+                    sum(r["finished"] - r["started"] for r in completed) / len(completed), 3
+                )
+                if completed
+                else None,
+            },
+            "remaining_runs": MAX_RUNS - len(runs),
+            "temporary": True,
+            "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"]))),
+        }
 
 
 @router.post("/runs/{run_id}/advance")
@@ -112,14 +156,14 @@ def advance(run_id: UUID, expected_step: int, x_demo_session: UUID = Header(...)
         if step == 0:
             sample = SAMPLE.with_name("nota-divergente.pdf") if run["scenario"] == "divergence" else SAMPLE
             run["invoice"] = extract_invoice(sample.read_bytes()).model_dump(mode="json")
-            message = f'PDF fictício lido: nota {run["invoice"]["number"]}, série 1 e CNPJ válido.'
+            message = f"PDF fictício lido: nota {run['invoice']['number']}, série 1 e CNPJ válido."
         elif step == 1:
             run["source_amount"] = Decimal("150.00") if run["scenario"] == "divergence" else Decimal("123.45")
             message = "Conta a pagar encontrada no adaptador de origem."
         elif step == 2:
             if Decimal(run["invoice"]["amount"]) != run["source_amount"]:
                 run["status"] = "needs_review"
-                message = f'Divergência: nota {run["invoice"]["amount"]}, origem {run["source_amount"]}. Lançamento bloqueado até revisão.'
+                message = f"Divergência: nota {run['invoice']['amount']}, origem {run['source_amount']}. Lançamento bloqueado até revisão."
             else:
                 message = "R$ 123,45 na nota e na origem: conferência aprovada."
         elif step == 3:
@@ -127,7 +171,10 @@ def advance(run_id: UUID, expected_step: int, x_demo_session: UUID = Header(...)
                 run["status"] = "duplicate"
                 message = "Nota já registrada nesta sessão: novo lançamento bloqueado. Protocolo original preservado."
             else:
-                state["ledger"][key] = {"protocol": "DEMO-" + uuid4().hex[:8].upper(), "amount": run["invoice"]["amount"]}
+                state["ledger"][key] = {
+                    "protocol": "DEMO-" + uuid4().hex[:8].upper(),
+                    "amount": run["invoice"]["amount"],
+                }
                 message = "Lançamento criado no adaptador de destino, em memória."
         elif step == 4:
             entry = state["ledger"].get(key)
@@ -174,5 +221,11 @@ def review(run_id: UUID, decision: ReviewDecision, x_demo_session: UUID = Header
             previous = run["source_amount"]
             run["source_amount"] = decision.corrected_source_amount
             run["status"] = "running"
-            event(run, 2, "Revisão humana: aprovada", f'Origem corrigida de {previous} para {decision.corrected_source_amount}. Justificativa: {decision.reason.strip()}', "review")
+            event(
+                run,
+                2,
+                "Revisão humana: aprovada",
+                f"Origem corrigida de {previous} para {decision.corrected_source_amount}. Justificativa: {decision.reason.strip()}",
+                "review",
+            )
         return snapshot(state, run)
