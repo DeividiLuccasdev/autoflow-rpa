@@ -1,5 +1,7 @@
 # Resultado dos testes — 1 de novembro de 2026
 
+> **Registro histórico** da primeira bateria completa. Etapas posteriores adicionaram contas, conciliação em lote e assistente (veja também [validação de contas](accounts-validation.md)). O estado atual da suíte é o do [CI](https://github.com/DeividiLuccasdev/autoflow-rpa/actions/workflows/ci.yml).
+
 Execução completa no GitHub Actions: [run 41333818072](https://github.com/DeividiLuccasdev/autoflow-rpa/actions/runs/41333818072).
 
 Commit testado: `077625d8fc2266a7b776b8fd91642358f8c98508`.
