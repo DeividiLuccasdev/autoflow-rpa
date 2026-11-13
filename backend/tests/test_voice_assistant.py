@@ -18,6 +18,9 @@ def test_login_requires_re_password_and_cookie(client):
     assert http.post('/assistant/login',json={'re':'1001','password':'wrong'}).status_code==401
     assert http.post('/assistant/login',json={'re':'9999','password':'AutoflowDemo2026!'}).status_code==401
     assert http.post('/assistant/login',json={'re':'1001','password':'AutoflowDemo2026!','role':'Supervisor'}).status_code==422
+    secret='sensitive-test-'*20
+    rejected=http.post('/assistant/login',json={'re':'1001','password':secret})
+    assert rejected.status_code==422 and secret not in rejected.text
     headers=login(http)
     assert http.get('/assistant/me').json()['profile']['role']=='Operador'
     assert http.post('/assistant/query',json={'text':'listar minhas notas'}).status_code==403

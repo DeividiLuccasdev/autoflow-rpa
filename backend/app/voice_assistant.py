@@ -52,7 +52,7 @@ def identity(request: Request):
         session = sessions.get(hashlib.sha256(token.encode()).hexdigest())
         if session is None:
             raise HTTPException(401, "Entre com o R.E. e a senha de demonstração")
-        if request.method == "POST" and not secrets.compare_digest(request.headers.get("X-Voice-CSRF", ""), session["csrf"]):
+        if request.method == "POST" and not secrets.compare_digest(request.headers.get("X-Voice-CSRF", "").encode(), session["csrf"].encode()):
             raise HTTPException(403, "Sessão inválida; entre novamente")
         return session
 

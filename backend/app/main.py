@@ -134,6 +134,6 @@ app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
 async def validation_error(request, exc):
     from fastapi.exception_handlers import request_validation_exception_handler
     from fastapi.responses import JSONResponse
-    if request.url.path.startswith("/auth/"):
+    if request.url.path.startswith(("/auth/", "/assistant/")):
         return JSONResponse({"detail": [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]}, status_code=422)
     return await request_validation_exception_handler(request, exc)
