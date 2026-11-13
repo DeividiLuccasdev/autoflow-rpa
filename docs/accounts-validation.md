@@ -1,5 +1,7 @@
 # Validação de contas — 1 de novembro de 2026
 
+> **Registro histórico** da entrega de contas por convite. O estado atual da suíte é o do [CI](https://github.com/DeividiLuccasdev/autoflow-rpa/actions/workflows/ci.yml).
+
 Commit de aplicação: `70b64f42fad88a68ec0fcd79db169a542e72592e`.
 
 [Execução completa no CI](https://github.com/DeividiLuccasdev/autoflow-rpa/actions/runs/41335014590): **145 testes aprovados em 56,98 segundos**, sem falhas ou testes pulados. A auditoria de dependências não encontrou vulnerabilidades conhecidas. Há um aviso de depreciação do TestClient, já presente na entrega anterior.
