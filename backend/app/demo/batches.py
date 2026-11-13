@@ -3,13 +3,14 @@
 Sem filas externas nesta demonstração: cada avanço processa um documento no backend.
 Estado temporário limitado usa o mesmo isolamento por sessão da demonstração existente.
 """
+
 import csv
 import hashlib
 import io
 import json
 import re
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from time import monotonic
 from typing import Literal
@@ -19,10 +20,10 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
-from .demo import ASSETS
-from .demo_automation import context, lock, TTL
-from .documents import extract_invoice, DocumentError
-from .schemas import InvoiceCreate
+from ..documents import DocumentError, extract_invoice
+from ..schemas import InvoiceCreate
+from .automation import TTL, context, lock
+from .pages import ASSETS
 
 router = APIRouter(prefix="/demo/batches", include_in_schema=False)
 FIXTURES = ASSETS / "batch-samples"
@@ -33,7 +34,7 @@ FIELDS = ["cnpj", "numero", "serie", "valor"]
 
 
 def key(invoice):
-    return f'{invoice["issuer_cnpj"]}:{invoice["number"]}:{invoice["series"]}'
+    return f"{invoice['issuer_cnpj']}:{invoice['number']}:{invoice['series']}"
 
 
 def read_statement(content):
@@ -49,7 +50,9 @@ def read_statement(content):
                 raise ValueError("Extrato deve ter até 50 linhas válidas, com quatro colunas")
             if not re.fullmatch(r"[0-9]+\.[0-9]{2}", row["valor"]):
                 raise ValueError(f"Linha {index}: valor deve usar ponto e duas casas decimais")
-            invoice = InvoiceCreate(issuer_cnpj=row["cnpj"], number=row["numero"], series=row["serie"], amount=Decimal(row["valor"])).model_dump(mode="json")
+            invoice = InvoiceCreate(
+                issuer_cnpj=row["cnpj"], number=row["numero"], series=row["serie"], amount=Decimal(row["valor"])
+            ).model_dump(mode="json")
             identity = key(invoice)
             if identity in rows:
                 raise ValueError("Extrato contém a mesma identidade de nota em mais de uma linha")
@@ -58,27 +61,41 @@ def read_statement(content):
             raise ValueError("O extrato está vazio")
         return rows
     except (UnicodeError, csv.Error, ValueError, ValidationError) as exc:
-        message = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, ValidationError) else "Extrato inválido; confira CNPJ, número, série e valor"
+        message = (
+            str(exc)
+            if isinstance(exc, ValueError) and not isinstance(exc, ValidationError)
+            else "Extrato inválido; confira CNPJ, número, série e valor"
+        )
         raise HTTPException(422, message) from exc
 
 
 def audit(item, title, message):
-    item["events"].append({"title": title, "message": message, "time": datetime.now(timezone.utc).isoformat()})
+    item["events"].append({"title": title, "message": message, "time": datetime.now(UTC).isoformat()})
 
 
 def report(state, batch):
     items = [{k: v for k, v in item.items() if k != "sample"} for item in batch["items"]]
     identities = {key(item["invoice"]) for item in items if item.get("invoice")}
-    counts = {status: sum(item["status"] == status for item in items) for status in ["queued", "registered", "needs_review", "duplicate", "invalid", "rejected"]}
-    amount = sum((Decimal(item["invoice"]["amount"]) for item in items if item["status"] == "registered"), Decimal("0.00"))
-    return {"id": batch["id"], "version": batch["cursor"], "total": len(items),
-            "status": "processing" if counts["queued"] else "needs_review" if counts["needs_review"] else "completed",
-            "items": items, "metrics": {**counts, "registered_amount": str(amount)},
-            "unmatched_statement": [row for identity, row in batch["statement"].items() if identity not in identities],
-            "elapsed_seconds": round(batch.get("finished", monotonic()) - batch["started"], 3),
-            "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"]))),
-            "scope": "Documentos fictícios, extrato de demonstração e destino simulado. Nenhum pagamento ou lançamento em ERP real.",
-            "temporary": True}
+    counts = {
+        status: sum(item["status"] == status for item in items)
+        for status in ["queued", "registered", "needs_review", "duplicate", "invalid", "rejected"]
+    }
+    amount = sum(
+        (Decimal(item["invoice"]["amount"]) for item in items if item["status"] == "registered"), Decimal("0.00")
+    )
+    return {
+        "id": batch["id"],
+        "version": batch["cursor"],
+        "total": len(items),
+        "status": "processing" if counts["queued"] else "needs_review" if counts["needs_review"] else "completed",
+        "items": items,
+        "metrics": {**counts, "registered_amount": str(amount)},
+        "unmatched_statement": [row for identity, row in batch["statement"].items() if identity not in identities],
+        "elapsed_seconds": round(batch.get("finished", monotonic()) - batch["started"], 3),
+        "expires_in_seconds": max(0, int(TTL - (monotonic() - state["created"]))),
+        "scope": "Documentos fictícios, extrato de demonstração e destino simulado. Nenhum pagamento ou lançamento em ERP real.",
+        "temporary": True,
+    }
 
 
 def find_batch(state, batch_id):
@@ -92,7 +109,10 @@ def make_batch(session_id, request_id, documents, statement_content):
     if not 1 <= len(documents) <= MAX_DOCUMENTS:
         raise HTTPException(422, "Envie de um a seis PDFs por lote")
     statement = read_statement(statement_content)
-    fingerprint = hashlib.sha256(json.dumps([(name, hashlib.sha256(content).hexdigest()) for name, content in documents]).encode() + statement_content).hexdigest()
+    fingerprint = hashlib.sha256(
+        json.dumps([(name, hashlib.sha256(content).hexdigest()) for name, content in documents]).encode()
+        + statement_content
+    ).hexdigest()
     allowed = {hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest(): name for name in SAMPLES}
     with lock:
         state = context(session_id, create=True)
@@ -107,11 +127,29 @@ def make_batch(session_id, request_id, documents, statement_content):
         items = []
         for name, content in documents:
             sample = allowed.get(hashlib.sha256(content).hexdigest())
-            items.append({"id": str(uuid4()), "filename": name.replace("\\", "/").split("/")[-1][:100] or "documento.pdf",
-                          "status": "queued", "sample": sample, "events": [], "invoice": None,
-                          "source_amount": None, "protocol": None, "reason": None})
-        batch = {"id": str(uuid4()), "request_id": str(request_id), "fingerprint": fingerprint,
-                 "items": items, "statement": statement, "cursor": 0, "seen": {}, "started": monotonic()}
+            items.append(
+                {
+                    "id": str(uuid4()),
+                    "filename": name.replace("\\", "/").split("/")[-1][:100] or "documento.pdf",
+                    "status": "queued",
+                    "sample": sample,
+                    "events": [],
+                    "invoice": None,
+                    "source_amount": None,
+                    "protocol": None,
+                    "reason": None,
+                }
+            )
+        batch = {
+            "id": str(uuid4()),
+            "request_id": str(request_id),
+            "fingerprint": fingerprint,
+            "items": items,
+            "statement": statement,
+            "cursor": 0,
+            "seen": {},
+            "started": monotonic(),
+        }
         batches[batch["id"]] = batch
         return report(state, batch)
 
@@ -122,17 +160,31 @@ def samples():
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in [*SAMPLES, "extrato.csv"]:
             archive.writestr(name, (FIXTURES / name).read_bytes())
-    return Response(output.getvalue(), media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="autoflow-exemplos-conciliacao.zip"'})
+    return Response(
+        output.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="autoflow-exemplos-conciliacao.zip"'},
+    )
 
 
 @router.post("/example", status_code=201)
 def example(request_id: UUID, x_demo_session: UUID = Header(...)):
     names = [SAMPLES[0], SAMPLES[1], SAMPLES[0], SAMPLES[2], SAMPLES[3]]
-    return make_batch(x_demo_session, request_id, [(name, (FIXTURES / name).read_bytes()) for name in names], (FIXTURES / "extrato.csv").read_bytes())
+    return make_batch(
+        x_demo_session,
+        request_id,
+        [(name, (FIXTURES / name).read_bytes()) for name in names],
+        (FIXTURES / "extrato.csv").read_bytes(),
+    )
 
 
 @router.post("", status_code=201)
-def upload_batch(request_id: UUID = Form(...), files: list[UploadFile] = File(...), statement: UploadFile = File(...), x_demo_session: UUID = Header(...)):
+def upload_batch(
+    request_id: UUID = Form(...),
+    files: list[UploadFile] = File(...),
+    statement: UploadFile = File(...),
+    x_demo_session: UUID = Header(...),
+):
     try:
         if not 1 <= len(files) <= MAX_DOCUMENTS:
             raise HTTPException(422, "Envie de um a seis PDFs por lote")
@@ -154,7 +206,10 @@ def summary(x_demo_session: UUID = Header(...)):
     with lock:
         state = context(x_demo_session, create=True)
         batches = list(state.get("batches", {}).values())
-        return {"batches": [report(state, batch) for batch in reversed(batches)], "remaining_batches": MAX_BATCHES - len(batches)}
+        return {
+            "batches": [report(state, batch) for batch in reversed(batches)],
+            "remaining_batches": MAX_BATCHES - len(batches),
+        }
 
 
 @router.get("/{batch_id}")
@@ -179,7 +234,11 @@ def advance(batch_id: UUID, expected_version: int, x_demo_session: UUID = Header
                 raise DocumentError("Este ambiente aceita somente os PDFs fictícios do pacote de exemplos")
             item["invoice"] = extract_invoice((FIXTURES / item["sample"]).read_bytes()).model_dump(mode="json")
             identity = key(item["invoice"])
-            audit(item, "Extraído", f'Nota {item["invoice"]["number"]}, CNPJ, série e valor validados pelo extrator Python.')
+            audit(
+                item,
+                "Extraído",
+                f"Nota {item['invoice']['number']}, CNPJ, série e valor validados pelo extrator Python.",
+            )
             source = batch["statement"].get(identity)
             item["source_amount"] = source["amount"] if source else None
             if identity in batch["seen"] or identity in ledger:
@@ -191,10 +250,18 @@ def advance(batch_id: UUID, expected_version: int, x_demo_session: UUID = Header
                 batch["seen"][identity] = item["id"]
                 if source is None:
                     item["status"], item["reason"] = "needs_review", "missing_source"
-                    audit(item, "Sem correspondência", "Nenhuma linha do extrato corresponde a CNPJ, número e série. Lançamento bloqueado.")
+                    audit(
+                        item,
+                        "Sem correspondência",
+                        "Nenhuma linha do extrato corresponde a CNPJ, número e série. Lançamento bloqueado.",
+                    )
                 elif Decimal(source["amount"]) != Decimal(item["invoice"]["amount"]):
                     item["status"], item["reason"] = "needs_review", "amount_mismatch"
-                    audit(item, "Valor divergente", f'Nota: {item["invoice"]["amount"]}; extrato: {source["amount"]}. Lançamento bloqueado.')
+                    audit(
+                        item,
+                        "Valor divergente",
+                        f"Nota: {item['invoice']['amount']}; extrato: {source['amount']}. Lançamento bloqueado.",
+                    )
                 else:
                     register(ledger, item, identity)
         except DocumentError as exc:
@@ -214,7 +281,11 @@ def register(ledger, item, identity):
     entry = {"protocol": "LOTE-" + uuid4().hex[:8].upper(), "amount": item["invoice"]["amount"]}
     ledger[identity] = entry
     item["protocol"], item["status"] = ledger[identity]["protocol"], "registered"
-    audit(item, "Registrado e confirmado", f'Lançamento de {entry["amount"]} confirmado no destino simulado. Protocolo {entry["protocol"]}.')
+    audit(
+        item,
+        "Registrado e confirmado",
+        f"Lançamento de {entry['amount']} confirmado no destino simulado. Protocolo {entry['protocol']}.",
+    )
 
 
 class BatchDecision(BaseModel):
@@ -240,10 +311,17 @@ def review(batch_id: UUID, item_id: UUID, decision: BatchDecision, x_demo_sessio
             audit(item, "Revisão: rejeitado", decision.reason.strip())
         else:
             if item["reason"] != "amount_mismatch":
-                raise HTTPException(409, "Sem correspondência no extrato: aprovação não permitida. Rejeite ou envie um novo lote com extrato corrigido")
+                raise HTTPException(
+                    409,
+                    "Sem correspondência no extrato: aprovação não permitida. Rejeite ou envie um novo lote com extrato corrigido",
+                )
             if decision.corrected_source_amount != Decimal(item["invoice"]["amount"]):
                 raise HTTPException(422, "Valor corrigido deve coincidir com o documento")
-            audit(item, "Revisão: origem corrigida", f'De {item["source_amount"]} para {decision.corrected_source_amount}. Justificativa: {decision.reason.strip()}')
+            audit(
+                item,
+                "Revisão: origem corrigida",
+                f"De {item['source_amount']} para {decision.corrected_source_amount}. Justificativa: {decision.reason.strip()}",
+            )
             item["corrected_source_amount"] = str(decision.corrected_source_amount)
             register(state.setdefault("batch_ledger", {}), item, key(item["invoice"]))
         return report(state, batch)
@@ -264,11 +342,46 @@ def download_report(batch_id: UUID, format: Literal["json", "csv"] = "json", x_d
     else:
         output = io.StringIO(newline="")
         writer = csv.writer(output, lineterminator="\r\n")
-        writer.writerow(["arquivo", "nota", "valor_documento", "valor_extrato_original", "valor_corrigido", "resultado", "protocolo", "auditoria"])
+        writer.writerow(
+            [
+                "arquivo",
+                "nota",
+                "valor_documento",
+                "valor_extrato_original",
+                "valor_corrigido",
+                "resultado",
+                "protocolo",
+                "auditoria",
+            ]
+        )
         for item in data["items"]:
-            values = [item["filename"], (item["invoice"] or {}).get("number"), (item["invoice"] or {}).get("amount"), item["source_amount"], item.get("corrected_source_amount"), item["status"], item["protocol"], " | ".join(f'{e["title"]}: {e["message"]}' for e in item["events"])]
+            values = [
+                item["filename"],
+                (item["invoice"] or {}).get("number"),
+                (item["invoice"] or {}).get("amount"),
+                item["source_amount"],
+                item.get("corrected_source_amount"),
+                item["status"],
+                item["protocol"],
+                " | ".join(f"{e['title']}: {e['message']}" for e in item["events"]),
+            ]
             writer.writerow([csv_cell(value) for value in values])
         for row in data["unmatched_statement"]:
-            writer.writerow([f'Extrato linha {row["line"]}', row["identity"].split(":")[1], "", row["amount"], "", "unmatched_statement", "", "Nenhum documento corresponde a esta linha do extrato"])
+            writer.writerow(
+                [
+                    f"Extrato linha {row['line']}",
+                    row["identity"].split(":")[1],
+                    "",
+                    row["amount"],
+                    "",
+                    "unmatched_statement",
+                    "",
+                    "Nenhum documento corresponde a esta linha do extrato",
+                ]
+            )
         content, mime = "\ufeff" + output.getvalue(), "text/csv; charset=utf-8"
-    return Response(content, media_type=mime, headers={"Content-Disposition": f'attachment; filename="autoflow-lote-{batch_id}.{format}"'})
+    return Response(
+        content,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="autoflow-lote-{batch_id}.{format}"'},
+    )

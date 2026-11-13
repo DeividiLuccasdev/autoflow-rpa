@@ -1,4 +1,5 @@
 """Comando único: infraestrutura descartável e todos os testes, sem skips."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -9,7 +10,9 @@ command = ["docker", "compose", "-f", str(root / "compose.test.yaml"), "-p", "au
 if subprocess.run(["docker", "info"], capture_output=True).returncode:
     sys.exit("Docker Desktop indisponível ou sem permissão. Inicie o Docker para executar o ambiente isolado.")
 try:
-    result = subprocess.run([*command, "up", "--build", "--abort-on-container-exit", "--exit-code-from", "tests"], cwd=root)
+    result = subprocess.run(
+        [*command, "up", "--build", "--abort-on-container-exit", "--exit-code-from", "tests"], cwd=root
+    )
 finally:
     subprocess.run([*command, "down", "--volumes", "--remove-orphans"], cwd=root, check=True)
 sys.exit(result.returncode)

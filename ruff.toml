@@ -1,0 +1,24 @@
+target-version = "py312"
+line-length = 120
+extend-exclude = ["backend/migrations/versions"]
+
+[lint]
+select = [
+    "E",   # pycodestyle
+    "W",
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplificações
+]
+ignore = [
+    "E501", # linhas longas: o formatter cuida do que é possível; strings ficam inteiras
+    "B008", # Depends()/File()/Header() em defaults é o padrão do FastAPI
+]
+
+[lint.isort]
+known-first-party = ["app", "rpa", "simulators"]
+
+[lint.per-file-ignores]
+"backend/tests/**" = ["B011"]

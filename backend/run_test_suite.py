@@ -1,4 +1,5 @@
 """Runner compartilhado por Docker e CI. Skip também resulta em falha."""
+
 import os
 import subprocess
 import sys
@@ -10,9 +11,17 @@ if not os.getenv("TEST_POSTGRES_URL") or not os.getenv("TEST_REDIS_URL"):
     sys.exit("PostgreSQL e Redis de teste são obrigatórios; execute python scripts/test_all.py na raiz.")
 database = urlsplit(os.environ["TEST_POSTGRES_URL"])
 broker = urlsplit(os.environ["TEST_REDIS_URL"])
-if database.scheme != "postgresql+psycopg" or database.hostname not in {"localhost", "127.0.0.1", "postgres", "request-db"} or not database.path.endswith("_test"):
+if (
+    database.scheme != "postgresql+psycopg"
+    or database.hostname not in {"localhost", "127.0.0.1", "postgres", "request-db"}
+    or not database.path.endswith("_test")
+):
     sys.exit("Banco recusado: PostgreSQL local/container dedicado e nome terminado em _test obrigatórios.")
-if broker.scheme != "redis" or broker.hostname not in {"localhost", "127.0.0.1", "redis", "request-redis"} or broker.path != "/15":
+if (
+    broker.scheme != "redis"
+    or broker.hostname not in {"localhost", "127.0.0.1", "redis", "request-redis"}
+    or broker.path != "/15"
+):
     sys.exit("Redis recusado: serviço local/container dedicado no banco 15 obrigatório.")
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["RUN_RPA_TESTS"] = "1"
