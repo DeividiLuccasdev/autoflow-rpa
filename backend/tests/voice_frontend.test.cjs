@@ -76,3 +76,26 @@ test('stopping or microphone error never submits or restarts capture',async()=>{
   const failed=await harness();failed.speech.onerror({error:'not-allowed'});failed.speech.onend();
   assert.equal(failed.speech.starts,1);
 });
+test('no-speech during slow zeros resumes without losing digits or submitting',async()=>{
+  const h=await harness();h.emit(['busque a nota zero zero',true]);
+  h.speech.onerror({error:'no-speech'});h.speech.onend();
+  assert.equal(h.speech.starts,2);
+  assert.equal(h.node('employee-command').value,'busque a nota zero zero');
+  h.emit(['um',true]);assert.equal(h.node('employee-command').value,'busque a nota zero zero um');
+  h.speech.onerror({error:'no-speech'});h.speech.onend();
+  assert.equal(h.speech.starts,3);
+  h.emit(['zero um',true]);assert.equal(h.node('employee-command').value,'busque a nota zero zero um zero um');
+  assert.equal(h.calls.filter(c=>c.url.endsWith('/query')).length,0);
+  h.emit(['zero um',true],['consulte',true]);await tick();
+  assert.equal(JSON.parse(h.calls.find(c=>c.url.endsWith('/query')).options.body).text,'busque a nota zero zero um zero um');
+  assert.equal(h.calls.filter(c=>c.url.endsWith('/query')).length,1);
+});
+test('repeated silence is bounded and explicit stop prevents a pending restart',async()=>{
+  const h=await harness();h.emit(['nota zero',true]);
+  for(let i=0;i<4;i++){h.speech.onerror({error:'no-speech'});h.speech.onend();}
+  assert.equal(h.speech.starts,4);
+  assert.equal(h.node('employee-command').value,'nota zero');
+  assert.equal(h.calls.filter(c=>c.url.endsWith('/query')).length,0);
+  const stopped=await harness();stopped.speech.onerror({error:'no-speech'});stopped.node('voice-stop').onclick();stopped.speech.onend();
+  assert.equal(stopped.speech.starts,1);
+});

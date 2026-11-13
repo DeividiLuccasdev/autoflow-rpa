@@ -68,6 +68,7 @@ def test_voice_transcript_digit_words_and_punctuation(client):
         result=http.post('/assistant/query',headers=headers,json={'text':text})
         assert result.status_code==200 and result.json()['count']==2
     assert http.post('/assistant/query',headers=headers,json={'text':'nota um zero quatro'}).json()['documents'][0]['number']=='104'
+    assert http.post('/assistant/query',headers=headers,json={'text':'busque a nota zero zero um zero um'}).json()['documents'][0]['number']=='101'
     assert http.post('/assistant/query',headers=headers,json={'text':'última nota do CPF 00000000001'}).json()['documents'][0]['number']=='102'
     assert http.post('/assistant/query',headers=headers,json={'text':'notas do CNPJ 12.345.678/0001-95'}).json()['count']==2
 
