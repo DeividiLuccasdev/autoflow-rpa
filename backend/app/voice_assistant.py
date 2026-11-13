@@ -27,9 +27,8 @@ COOKIE = "autoflow_voice_demo"
 DEMO_PASSWORD = "AutoflowDemo2026!"
 DEMO_HASH = password_hash(DEMO_PASSWORD)
 PROFILES = {
-    "1001": {"re":"1001", "name":"Ana · funcionária fictícia", "role":"Operador", "units":["Araraquara"], "full_identifier":True, "download":True},
-    "2001": {"re":"2001", "name":"Bruno · funcionário fictício", "role":"Supervisor", "units":["Araraquara","São Carlos"], "full_identifier":True, "download":True},
-    "3001": {"re":"3001", "name":"Carla · funcionária fictícia", "role":"Auditor", "units":["Araraquara","São Carlos"], "full_identifier":False, "download":False},
+    "05": {"re":"05", "name":"Ana · funcionária fictícia", "role":"Funcionário", "units":["Araraquara","São Carlos"], "full_identifier":True, "download":True, "full_record":False},
+    "10": {"re":"10", "name":"Bruno · diretor fictício", "role":"Diretoria", "units":["Araraquara","São Carlos"], "full_identifier":True, "download":True, "full_record":True},
 }
 DOCUMENTS = [
     {"id":"nf-101", "number":"101", "unit":"Araraquara", "date":"2026-11-10", "tax_type":"CPF", "tax_id":"00000000001", "recipient":"Pessoa Exemplo A", "amount":"123.45", "description":"Serviço demonstrativo A", "status":"Validada"},
@@ -37,6 +36,14 @@ DOCUMENTS = [
     {"id":"nf-103", "number":"103", "unit":"Araraquara", "date":"2026-11-12", "tax_type":"CNPJ", "tax_id":"12345678000195", "recipient":"Empresa Exemplo", "amount":"300.00", "description":"Serviço demonstrativo C", "status":"Validada"},
     {"id":"nf-104", "number":"104", "unit":"São Carlos", "date":"2026-11-13", "tax_type":"CNPJ", "tax_id":"12345678000195", "recipient":"Empresa Exemplo", "amount":"87.65", "description":"Serviço demonstrativo D", "status":"Validada"},
 ]
+
+# Dados adicionais exclusivamente fictícios da ficha de cobrança.
+DEBT_RECORDS = {
+    "nf-101": {"debtor_name":"Aurora Horizonte Serviços Demonstrativos Ltda.", "outstanding_amount":"123.45", "address":"Rua Fictícia das Acácias, 101 · Bairro Exemplo · Araraquara/SP", "phone":"(00) 00000-0101", "total_debt":"740.70", "remaining_installments":6},
+    "nf-102": {"debtor_name":"Aurora Horizonte Serviços Demonstrativos Ltda.", "outstanding_amount":"200.00", "address":"Avenida Fictícia do Sol, 202 · Bairro Exemplo · São Carlos/SP", "phone":"(00) 00000-0102", "total_debt":"800.00", "remaining_installments":4},
+    "nf-103": {"debtor_name":"Órbita Azul Comércio e Soluções Fictícias Ltda.", "outstanding_amount":"300.00", "address":"Rua Fictícia das Estrelas, 303 · Bairro Exemplo · Araraquara/SP", "phone":"(00) 00000-0103", "total_debt":"1500.00", "remaining_installments":5},
+    "nf-104": {"debtor_name":"Órbita Azul Comércio e Soluções Fictícias Ltda.", "outstanding_amount":"87.65", "address":"Alameda Fictícia da Lua, 404 · Bairro Exemplo · São Carlos/SP", "phone":"(00) 00000-0104", "total_debt":"262.95", "remaining_installments":3},
+}
 
 
 def clean_sessions():
@@ -64,6 +71,10 @@ def record(session, action, detail):
 
 def serialize(document, profile):
     result = dict(document)
+    debt = DEBT_RECORDS[document["id"]]
+    result.update({key:debt[key] for key in ("debtor_name","outstanding_amount")})
+    if profile["full_record"]:
+        result.update({key:debt[key] for key in ("address","phone","total_debt","remaining_installments")})
     if not profile["full_identifier"]:
         result["tax_id"] = "*" * (len(document["tax_id"]) - 2) + document["tax_id"][-2:]
     result["can_download"] = profile["download"]
@@ -82,7 +93,7 @@ def authorized_document(session, document_id):
 
 class Login(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    re: str = Field(pattern=r"^[0-9]{4}$")
+    re: str = Field(pattern=r"^[0-9]{2}$")
     password: str = Field(min_length=1,max_length=128,repr=False)
 
 
@@ -181,7 +192,11 @@ def pdf(document_id: str,session=Depends(identity)):
         with pymupdf.open() as output:
             page = output.new_page()
             lines = ["AUTOFLOW - NOTA DEMONSTRATIVA", "DOCUMENTO FICTICIO - SEM VALOR FISCAL",f'Nota: {doc["number"]}',f'Data: {doc["date"]}',f'Unidade: {doc["unit"]}',f'Destinatario: {doc["recipient"]}',f'{doc["tax_type"]}: {doc["tax_id"]}',f'Descricao: {doc["description"]}',f'Quantidade: 1 / Valor unitario: R$ {doc["amount"]}',f'Total: R$ {doc["amount"]}',f'Status: {doc["status"]}']
-            page.insert_text((55,70),"\n\n".join(lines),fontsize=12)
+            fields = serialize(doc, session["profile"])
+            lines += [f'Razao social ficticia: {fields["debtor_name"]}',f'Valor devedor da nota: R$ {fields["outstanding_amount"]}']
+            if session["profile"]["full_record"]:
+                lines += [f'Endereco ficticio: {fields["address"]}',f'Telefone ficticio: {fields["phone"]}',f'Divida total: R$ {fields["total_debt"]}',f'Parcelas restantes: {fields["remaining_installments"]}']
+            page.insert_textbox(pymupdf.Rect(45,50,550,790),"\n\n".join(lines),fontsize=10)
             content = output.tobytes()
         record(session,"document.download",f'Nota {doc["number"]}')
         return Response(content,media_type="application/pdf",headers={"Content-Disposition":f'attachment; filename="autoflow-nota-demo-{doc["number"]}.pdf"'})

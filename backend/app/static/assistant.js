@@ -16,7 +16,7 @@ function clearEmployee(){
 function showEmployee(data){
   employee=data.profile;employeeCsrf=data.csrf_token;byId('login-panel').hidden=true;byId('assistant-panel').hidden=false;
   byId('employee-name').textContent=`R.E. ${employee.re} · ${employee.role}`;
-  byId('employee-access').textContent=`${employee.name} · Unidades: ${employee.units.join(' e ')} · ${employee.download?'Download autorizado':'Sem download de PDF'} · ${employee.full_identifier?'Identificadores completos':'Identificadores mascarados'}`;
+  byId('employee-access').textContent=`${employee.name} · Unidades: ${employee.units.join(' e ')} · ${employee.download?'Download autorizado':'Sem download de PDF'} · ${employee.full_record?'Ficha completa de cobrança':'Nota, valor devedor e razão social'}`;
   byId('employee-message').textContent='';setupRecognition();
 }
 byId('employee-login').onsubmit=async event=>{
@@ -35,9 +35,11 @@ async function openEmployeeDocument(id){
   const response=await employeeRequest('/documents/'+encodeURIComponent(id));openedDocument=await response.json();
   byId('document-detail').hidden=false;byId('employee-history').hidden=true;byId('document-title').textContent='Nota '+openedDocument.number;
   byId('download-pdf').hidden=!openedDocument.can_download;
-  byId('document-fields').innerHTML=[['Número',openedDocument.number],['Unidade',openedDocument.unit],['Data',openedDocument.date],['Destinatário',openedDocument.recipient],[openedDocument.tax_type,openedDocument.tax_id],['Valor total',money(openedDocument.amount)],['Situação',openedDocument.status]].map(([label,value])=>`<div><dt>${safe(label)}</dt><dd>${safe(value)}</dd></div>`).join('');
+  const fields=[['Número',openedDocument.number],['Unidade',openedDocument.unit],['Data',openedDocument.date],['Razão social fictícia',openedDocument.debtor_name],[openedDocument.tax_type,openedDocument.tax_id],['Valor da nota',money(openedDocument.amount)],['Valor devedor da nota',money(openedDocument.outstanding_amount)],['Situação',openedDocument.status]];
+  if(employee.full_record)fields.push(['Endereço fictício',openedDocument.address],['Telefone fictício',openedDocument.phone],['Valor total da dívida',money(openedDocument.total_debt)],['Parcelas restantes',openedDocument.remaining_installments]);
+  byId('document-fields').innerHTML=fields.map(([label,value])=>`<div><dt>${safe(label)}</dt><dd>${safe(value)}</dd></div>`).join('');
   byId('document-items').innerHTML=openedDocument.items.map(item=>`<article class="line-item"><strong>${safe(item.description)}</strong><span>${item.quantity} unidade · ${money(item.unit_price)} · Total: ${money(item.total)}</span></article>`).join('');
-  byId('assistant-answer').textContent=`Nota ${openedDocument.number} aberta. Valor total ${money(openedDocument.amount)}.`;
+  byId('assistant-answer').textContent=`Nota ${openedDocument.number} aberta. Valor devedor ${money(openedDocument.outstanding_amount)}.`;
 }
 async function showEmployeeHistory(){
   const data=await (await employeeRequest('/history')).json();byId('employee-history').hidden=false;
@@ -56,11 +58,12 @@ async function executeEmployeeCommand(text){
     if(/^(sair|encerrar sessao)[.!?]*$/.test(normalized)){await employeeLogout();return;}
     if(/(historico|auditoria)/.test(normalized)){await showEmployeeHistory();return;}
     if(/(baixar|download).*(pdf|nota|documento)/.test(normalized)){await downloadEmployeePdf();return;}
-    if(/qual.*valor/.test(normalized)){if(!openedDocument)throw new Error('Abra uma nota para consultar seu valor.');byId('assistant-answer').textContent=`A nota ${openedDocument.number} tem valor total de ${money(openedDocument.amount)}.`;return;}
+    if(/(endereco|telefone|divida total|total da divida|parcelas)/.test(normalized)){if(!openedDocument)throw new Error('Abra uma nota para consultar sua ficha.');if(!employee.full_record)throw new Error('Endereço, telefone, dívida total e parcelas são exclusivos da diretoria.');byId('assistant-answer').textContent=`${openedDocument.debtor_name}. Endereço: ${openedDocument.address}. Telefone: ${openedDocument.phone}. Dívida total: ${money(openedDocument.total_debt)}. Parcelas restantes: ${openedDocument.remaining_installments}.`;return;}
+    if(/qual.*valor/.test(normalized)){if(!openedDocument)throw new Error('Abra uma nota para consultar seu valor.');byId('assistant-answer').textContent=`A nota ${openedDocument.number} tem valor devedor de ${money(openedDocument.outstanding_amount)}.`;return;}
     const opening=normalized.match(/^(?:abrir|abra|mostrar|mostre)\s+(?:(?:a|o|nota|resultado)\s+)*(primeir[ao]|segund[ao]|terceir[ao]|quart[ao]|[1-9])(?:\s+(?:nota|resultado))?[.!?]*$/);
     if(opening){const index=/^primeir/.test(opening[1])?0:/^segund/.test(opening[1])?1:/^terceir/.test(opening[1])?2:/^quart/.test(opening[1])?3:Number(opening[1])-1;if(!employeeResults[index])throw new Error('Esse resultado não está disponível. Faça uma busca primeiro.');await openEmployeeDocument(employeeResults[index].id);return;}
     const data=await (await employeeRequest('/query','POST',{text})).json();employeeResults=data.documents;openedDocument=null;byId('document-detail').hidden=true;byId('employee-history').hidden=true;byId('assistant-answer').textContent=data.message;
-    byId('document-results').innerHTML=data.documents.map((document,index)=>`<button type="button" class="document-result" data-document="${safe(document.id)}"><span>0${index+1} / NOTA ${safe(document.number)}</span><strong>${money(document.amount)}</strong><p>${safe(document.recipient)} · ${safe(document.unit)}</p><small>${safe(document.tax_type)} ${safe(document.tax_id)} · ${safe(document.date)}</small><b>Abrir nota ↗</b></button>`).join('');
+    byId('document-results').innerHTML=data.documents.map((document,index)=>`<button type="button" class="document-result" data-document="${safe(document.id)}"><span>0${index+1} / NOTA ${safe(document.number)}</span><strong>${money(document.outstanding_amount)}</strong><p>${safe(document.debtor_name)} · ${safe(document.unit)}</p><small>${safe(document.tax_type)} ${safe(document.tax_id)} · ${safe(document.date)}</small><b>Abrir nota ↗</b></button>`).join('');
     document.querySelectorAll('[data-document]').forEach(button=>button.onclick=()=>openEmployeeDocument(button.dataset.document).catch(error=>byId('employee-message').textContent=error.message));
   }catch(error){byId('employee-message').textContent=error.message;}finally{commandBusy=false;}
 }
