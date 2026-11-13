@@ -2,6 +2,12 @@ const byId=id=>document.getElementById(id);
 const safe=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 let employee=null, employeeCsrf='', employeeResults=[], openedDocument=null, recognition=null, listening=false, commandBusy=false;
+let voiceActive=false, voiceCancelled=false, voiceSubmitted=false;
+
+function cancelVoiceInput(){
+  voiceCancelled=true;
+  if(voiceActive)recognition?.abort();
+}
 
 async function employeeRequest(path,method='GET',body){
   const response=await fetch('/assistant'+path,{method,headers:{...(method==='POST'?{'X-Voice-CSRF':employeeCsrf}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(90000)});
@@ -9,7 +15,7 @@ async function employeeRequest(path,method='GET',body){
   return response;
 }
 function clearEmployee(){
-  recognition?.abort();employee=null;employeeCsrf='';employeeResults=[];openedDocument=null;
+  cancelVoiceInput();employee=null;employeeCsrf='';employeeResults=[];openedDocument=null;
   byId('assistant-panel').hidden=true;byId('login-panel').hidden=false;byId('document-detail').hidden=true;byId('employee-history').hidden=true;
   byId('document-results').replaceChildren();byId('document-fields').replaceChildren();byId('document-items').replaceChildren();byId('employee-events').replaceChildren();byId('assistant-answer').textContent='';byId('employee-command').value='';
 }
@@ -52,7 +58,9 @@ async function downloadEmployeePdf(){
   byId('assistant-answer').textContent='PDF fictício autorizado para download.';
 }
 async function executeEmployeeCommand(text){
-  if(commandBusy||!employee)return;commandBusy=true;byId('employee-message').textContent='';byId('employee-command').value=text;
+  if(commandBusy||!employee)return;
+  cancelVoiceInput();commandBusy=true;byId('employee-message').textContent='Consultando…';byId('employee-command').value=text;
+  const submit=byId('command-form').querySelector('[type="submit"]');submit.disabled=true;submit.textContent='Consultando…';byId('command-form').setAttribute('aria-busy','true');
   const normalized=text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
   try{
     if(/^(sair|encerrar sessao)[.!?]*$/.test(normalized)){await employeeLogout();return;}
@@ -65,7 +73,8 @@ async function executeEmployeeCommand(text){
     const data=await (await employeeRequest('/query','POST',{text})).json();employeeResults=data.documents;openedDocument=null;byId('document-detail').hidden=true;byId('employee-history').hidden=true;byId('assistant-answer').textContent=data.message;
     byId('document-results').innerHTML=data.documents.map((document,index)=>`<button type="button" class="document-result" data-document="${safe(document.id)}"><span>0${index+1} / NOTA ${safe(document.number)}</span><strong>${money(document.outstanding_amount)}</strong><p>${safe(document.debtor_name)} · ${safe(document.unit)}</p><small>${safe(document.tax_type)} ${safe(document.tax_id)} · ${safe(document.date)}</small><b>Abrir nota ↗</b></button>`).join('');
     document.querySelectorAll('[data-document]').forEach(button=>button.onclick=()=>openEmployeeDocument(button.dataset.document).catch(error=>byId('employee-message').textContent=error.message));
-  }catch(error){byId('employee-message').textContent=error.message;}finally{commandBusy=false;}
+    byId('employee-message').textContent='';
+  }catch(error){byId('employee-message').textContent=error.name==='TimeoutError'?'O servidor está demorando para responder. Tente consultar novamente.':error.message;}finally{commandBusy=false;submit.disabled=false;submit.textContent='Consultar →';byId('command-form').setAttribute('aria-busy','false');if(byId('employee-message').textContent==='Consultando…')byId('employee-message').textContent='';}
 }
 byId('command-form').onsubmit=event=>{event.preventDefault();executeEmployeeCommand(byId('employee-command').value);};
 document.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>executeEmployeeCommand(button.dataset.command));
@@ -76,13 +85,22 @@ function setupRecognition(){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!Recognition){byId('voice-start').disabled=true;byId('voice-status').textContent='Este navegador não oferece reconhecimento de voz. Continue digitando ou use um navegador compatível.';return;}
   if(recognition)return;
-  recognition=new Recognition();recognition.lang='pt-BR';recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
-  recognition.onstart=()=>{listening=true;byId('voice-start').setAttribute('aria-pressed','true');byId('voice-stop').hidden=false;byId('voice-status').textContent='Ouvindo… diga um comando. Pode parar o microfone a qualquer momento.';};
-  recognition.onresult=event=>{const text=event.results[0][0].transcript;byId('employee-command').value=text;byId('voice-status').textContent='Entendi: '+text;executeEmployeeCommand(text);};
-  recognition.onend=()=>{listening=false;byId('voice-start').setAttribute('aria-pressed','false');byId('voice-stop').hidden=true;};
-  recognition.onerror=event=>{byId('voice-status').textContent=event.error==='not-allowed'?'Microfone não autorizado. Você pode continuar digitando.':event.error==='no-speech'?'Não ouvi um comando. Tente novamente ou digite.':'Não foi possível transcrever o áudio. Continue digitando ou tente novamente.';};
+  recognition=new Recognition();recognition.lang='pt-BR';recognition.continuous=false;recognition.interimResults=true;recognition.maxAlternatives=1;
+  recognition.onstart=()=>{if(voiceCancelled||!employee){recognition.abort();return;}listening=true;byId('voice-start').setAttribute('aria-pressed','true');byId('voice-stop').hidden=false;byId('voice-status').textContent='Ouvindo… o texto aparece enquanto você fala.';};
+  recognition.onresult=event=>{
+    if(!employee||!voiceActive||voiceCancelled||voiceSubmitted)return;
+    const results=Array.from(event.results);
+    const text=results.map(result=>result[0].transcript.trim()).filter(Boolean).join(' ');
+    byId('employee-command').value=text;
+    const finished=results.length>0&&results.every(result=>result.isFinal);
+    byId('voice-status').textContent=finished?'Entendi: '+text:'Transcrevendo: '+text;
+    if(finished&&text){voiceSubmitted=true;executeEmployeeCommand(text);}
+  };
+  recognition.onend=()=>{voiceActive=false;listening=false;byId('voice-start').setAttribute('aria-pressed','false');byId('voice-stop').hidden=true;if(!voiceCancelled&&!voiceSubmitted&&employee)byId('voice-status').textContent='Microfone encerrado. Confira o texto e clique em Consultar, ou fale novamente.';};
+  recognition.onerror=event=>{if(voiceCancelled||!employee)return;voiceCancelled=true;byId('voice-status').textContent=event.error==='not-allowed'?'Microfone não autorizado. Você pode continuar digitando.':event.error==='no-speech'?'Não ouvi um comando. Tente novamente ou digite.':'Não foi possível transcrever o áudio. Continue digitando ou tente novamente.';};
 }
-byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(listening){recognition.stop();return;}try{recognition.start();}catch{byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
-byId('voice-stop').onclick=()=>recognition?.abort();
-window.addEventListener('pagehide',()=>recognition?.abort());
+byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(voiceActive){recognition.stop();return;}voiceCancelled=false;voiceSubmitted=false;voiceActive=true;try{recognition.start();byId('voice-status').textContent='Ativando microfone…';}catch{voiceActive=false;byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
+byId('voice-stop').onclick=()=>recognition?.stop();
+byId('employee-command').addEventListener('input',()=>{if(voiceActive){cancelVoiceInput();byId('voice-status').textContent='Edição manual. Corrija o comando e clique em Consultar.';}});
+window.addEventListener('pagehide',cancelVoiceInput);
 employeeRequest('/me').then(response=>response.json()).then(showEmployee).catch(()=>{});
