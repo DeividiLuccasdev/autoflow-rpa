@@ -2,6 +2,14 @@
 
 Plataforma de portfólio para automação financeira com documentos e empresas fictícios.
 
+## Vídeo de apresentação
+
+[▶ Assistir ao vídeo do AutoFlow RPA (28 segundos)](https://portfolio-deividi.vercel.app/projects/autoflow-rpa/apresentacao.mp4)
+
+[Baixar MP4](docs/apresentacao.mp4) · [Legendas em português](docs/apresentacao.vtt) · [Ver no portfólio](https://portfolio-deividi.vercel.app/)
+
+A apresentação reúne capturas reais do painel, da automação de documentos, da conciliação em lote e do e-mail de cobrança preenchido com PDF e protocolo. É um resumo visual, sem narração; os dados e os envios de cobrança são fictícios.
+
 A demonstração é pública. A [área privada](https://autoflow-rpa-api.onrender.com/workspace) oferece acesso por convite, sessões revogáveis e documentos separados por usuário. Veja [como emitir um convite e ativar uma conta](docs/accounts.md).
 
 ## Rodar todos os testes

@@ -1,0 +1,19 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:04.000
+AutoFlow RPA. Automação financeira com Python
+
+00:00:04.000 --> 00:00:09.000
+Uma operação conectada. Painel, documentos e rastreabilidade
+
+00:00:09.000 --> 00:00:14.000
+Do documento à validação. Extração de PDF, conferência e registro no destino simulado
+
+00:00:14.000 --> 00:00:19.000
+Conciliação em lote. CSV + PDFs: duplicidades, divergências e revisão humana
+
+00:00:19.000 --> 00:00:24.000
+Nota e cobrança automática. PDF anexo, mensagem preenchida e protocolo de envio simulado
+
+00:00:24.000 --> 00:00:28.000
+200 testes automatizados aprovados. Conheça: autoflow-rpa-api.onrender.com
