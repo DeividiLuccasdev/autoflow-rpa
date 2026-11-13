@@ -76,9 +76,9 @@ class HttpSecurityMiddleware:
             group, maximum = "login", 10
         elif path.startswith("/auth/"):
             group, maximum = "private", 60
-        elif path == "/demo/analyze" or path == "/demo/automation/runs":
+        elif path in {"/demo/analyze", "/demo/automation/runs", "/demo/batches", "/demo/batches/example"}:
             group, maximum = "demo-create", 15
-        elif path.startswith("/demo/automation/"):
+        elif path.startswith(("/demo/automation/", "/demo/batches/")):
             group, maximum = "demo-advance", 90
         if group and not limiter.allow(peer, group, maximum):
             return await JSONResponse({"detail": "Limite temporário de requisições; aguarde um minuto"}, status_code=429, headers={"Retry-After": "60"})(scope, receive, protected_send)
