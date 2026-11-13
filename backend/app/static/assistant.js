@@ -4,6 +4,7 @@ const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',curren
 let employee=null, employeeCsrf='', employeeResults=[], openedDocument=null, recognition=null, listening=false, commandBusy=false;
 let voiceActive=false, voiceCancelled=false, voiceSubmitted=false;
 let voicePrefix='';
+let voiceSilenceRetries=0;
 
 function cancelVoiceInput(){
   voiceCancelled=true;
@@ -90,6 +91,7 @@ function setupRecognition(){
   recognition.onstart=()=>{if(voiceCancelled||!employee){recognition.abort();return;}listening=true;byId('voice-start').setAttribute('aria-pressed','true');byId('voice-stop').hidden=false;byId('voice-status').textContent='Ouvindo… o texto aparece enquanto você fala.';};
   recognition.onresult=event=>{
     if(!employee||!voiceActive||voiceCancelled||voiceSubmitted)return;
+    voiceSilenceRetries=0;
     const results=Array.from(event.results);
     const text=[voicePrefix,...results.map(result=>result[0].transcript.trim())].filter(Boolean).join(' ');
     byId('employee-command').value=text;
@@ -110,9 +112,17 @@ function setupRecognition(){
     }
     voiceActive=false;byId('voice-start').setAttribute('aria-pressed','false');byId('voice-stop').hidden=true;
   };
-  recognition.onerror=event=>{if(voiceCancelled||!employee)return;voiceCancelled=true;byId('voice-status').textContent=event.error==='not-allowed'?'Microfone não autorizado. Você pode continuar digitando.':event.error==='no-speech'?'Não ouvi um comando. Tente novamente ou digite.':'Não foi possível transcrever o áudio. Continue digitando ou tente novamente.';};
+  recognition.onerror=event=>{
+    if(voiceCancelled||!employee)return;
+    if(event.error==='no-speech'&&voiceActive&&!voiceSubmitted&&++voiceSilenceRetries<=3){
+      byId('voice-status').textContent='Aguardando você continuar… sua transcrição foi preservada. Diga “consulte” somente ao terminar.';
+      return;
+    }
+    voiceCancelled=true;
+    byId('voice-status').textContent=event.error==='not-allowed'?'Microfone não autorizado. Você pode continuar digitando.':event.error==='no-speech'?'Captura pausada após silêncio prolongado. O texto foi preservado; você pode corrigir e clicar em Consultar.':'Não foi possível transcrever o áudio. O texto foi preservado. Continue digitando ou tente novamente.';
+  };
 }
-byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(voiceActive){cancelVoiceInput();return;}voicePrefix='';voiceCancelled=false;voiceSubmitted=false;voiceActive=true;try{recognition.start();byId('voice-status').textContent='Ativando microfone… fale com calma e diga “consulte” ao terminar.';}catch{voiceActive=false;byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
+byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(voiceActive){cancelVoiceInput();return;}voicePrefix='';voiceSilenceRetries=0;voiceCancelled=false;voiceSubmitted=false;voiceActive=true;try{recognition.start();byId('voice-status').textContent='Ativando microfone… fale com calma e diga “consulte” ao terminar.';}catch{voiceActive=false;byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
 byId('voice-stop').onclick=()=>{cancelVoiceInput();byId('voice-status').textContent='Microfone parado. Nenhuma consulta foi enviada. Você pode corrigir o texto ou clicar em Consultar.';};
 byId('employee-command').addEventListener('input',()=>{if(voiceActive){cancelVoiceInput();byId('voice-status').textContent='Edição manual. Corrija o comando e clique em Consultar.';}});
 window.addEventListener('pagehide',cancelVoiceInput);
