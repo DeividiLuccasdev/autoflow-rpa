@@ -57,8 +57,8 @@ class HttpSecurityMiddleware:
                 csp = f"default-src 'self'; script-src {script}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
                 values.extend([(b"content-security-policy", csp.encode()), (b"x-frame-options", b"DENY"),
                                (b"x-content-type-options", b"nosniff"), (b"referrer-policy", b"no-referrer"),
-                               (b"permissions-policy", b"camera=(), microphone=(), geolocation=()")])
-                if path.startswith(("/api/", "/demo/", "/auth/")) or path == "/workspace":
+                               (b"permissions-policy", b"camera=(), microphone=(self), geolocation=()" if path == "/assistente" else b"camera=(), microphone=(), geolocation=()")])
+                if path.startswith(("/api/", "/demo/", "/auth/", "/assistant/")) or path in {"/workspace", "/assistente"}:
                     values.append((b"cache-control", b"no-store"))
                 elif path == "/":
                     values.append((b"cache-control", b"no-cache"))
@@ -72,9 +72,9 @@ class HttpSecurityMiddleware:
         group, maximum = None, 0
         if path.startswith("/api/v1/"):
             group, maximum = "private", 60
-        elif path in {"/auth/login", "/auth/register"}:
+        elif path in {"/auth/login", "/auth/register", "/assistant/login"}:
             group, maximum = "login", 10
-        elif path.startswith("/auth/"):
+        elif path.startswith(("/auth/", "/assistant/")):
             group, maximum = "private", 60
         elif path in {"/demo/analyze", "/demo/automation/runs", "/demo/batches", "/demo/batches/example"}:
             group, maximum = "demo-create", 15

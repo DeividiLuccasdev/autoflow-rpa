@@ -17,6 +17,7 @@ from .http_security import HttpSecurityMiddleware
 from .demo import router as demo_router, ASSETS
 from .demo_automation import router as automation_router
 from .demo_batches import router as batches_router
+from .voice_assistant import router as voice_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from .accounts import router as accounts_router
@@ -126,12 +127,13 @@ app.include_router(accounts_router)
 app.include_router(demo_router)
 app.include_router(automation_router)
 app.include_router(batches_router)
+app.include_router(voice_router)
 app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request, exc):
     from fastapi.exception_handlers import request_validation_exception_handler
     from fastapi.responses import JSONResponse
-    if request.url.path.startswith("/auth/"):
+    if request.url.path.startswith(("/auth/", "/assistant/")):
         return JSONResponse({"detail": [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]}, status_code=422)
     return await request_validation_exception_handler(request, exc)
