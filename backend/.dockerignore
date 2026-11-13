@@ -1,7 +1,19 @@
+# Imagem de produção (Dockerfile). A imagem de testes usa Dockerfile.test.dockerignore.
 .venv
 __pycache__
 **/__pycache__
 .pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+test-results.xml
 *.db
 *.db-*
 .env
+tests/
+run_test_suite.py
+requirements-dev.txt
+requirements-rpa.txt
+rpa/
+simulators/
+Dockerfile*

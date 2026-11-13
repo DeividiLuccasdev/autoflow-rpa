@@ -32,7 +32,7 @@ Na pasta `backend`:
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python -m alembic upgrade head
 .venv\Scripts\python -m uvicorn app.main:app --env-file ../.env --reload
 ```
@@ -45,6 +45,14 @@ Abra:
 - http://localhost:8000/docs — Swagger (**Authorize** recebe a `AUTOFLOW_API_KEY`)
 
 As rotas `/api/v1` aceitam sessão individual com proteção CSRF nas escritas, ou `X-API-Key` para o acervo legado. Health e documentação são públicos.
+
+## Dependências
+
+| Arquivo | Conteúdo |
+| --- | --- |
+| `requirements.txt` | Execução da API, do worker e das migrações (é o que vai para a imagem Docker e para o Render) |
+| `requirements-dev.txt` | O anterior + pytest, pytest-cov, httpx e ruff |
+| `requirements-rpa.txt` | O primeiro + Playwright, para o robô de navegador |
 
 ## Migração de banco antigo
 

@@ -9,3 +9,6 @@ celerybeat-schedule*
 *.db-*
 rpa-evidence/
 test-results.xml
+.coverage
+coverage.xml
+.ruff_cache/

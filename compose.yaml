@@ -36,6 +36,8 @@ services:
   migrate:
     build: ./backend
     command: python -m alembic upgrade head
+    healthcheck:
+      disable: true  # sem servidor HTTP; o healthcheck da imagem vale só para a API
     environment:
       DATABASE_URL: postgresql+psycopg://autoflow:local_demo_only@db:5432/autoflow
     depends_on:
@@ -44,6 +46,8 @@ services:
   worker:
     build: ./backend
     command: celery -A app.worker:celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=50
+    healthcheck:
+      disable: true  # sem servidor HTTP; o healthcheck da imagem vale só para a API
     mem_limit: 512m
     cpus: 1.0
     security_opt:
@@ -59,6 +63,8 @@ services:
   scheduler:
     build: ./backend
     command: celery -A app.worker:celery_app beat --loglevel=info
+    healthcheck:
+      disable: true  # sem servidor HTTP; o healthcheck da imagem vale só para a API
     environment:
       REDIS_URL: redis://redis:6379/0
     depends_on:

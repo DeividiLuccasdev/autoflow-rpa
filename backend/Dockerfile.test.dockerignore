@@ -1,0 +1,12 @@
+# Imagem de testes (Dockerfile.test): inclui testes, robô e simulador.
+.venv
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+coverage.xml
+test-results.xml
+*.db
+*.db-*
+.env

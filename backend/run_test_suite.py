@@ -26,8 +26,28 @@ if (
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["RUN_RPA_TESTS"] = "1"
 report = Path("test-results.xml")
-result = subprocess.run([sys.executable, "-m", "pytest", "-q", f"--junitxml={report}"])
+coverage = Path("coverage.xml")
+result = subprocess.run(
+    [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        f"--junitxml={report}",
+        "--cov=app",
+        "--cov-report=term-missing:skip-covered",
+        f"--cov-report=xml:{coverage}",
+    ]
+)
 if result.returncode:
     sys.exit(result.returncode)
-if any(int(suite.get("skipped", "0")) for suite in ET.parse(report).getroot().iter("testsuite")):
+suites = list(ET.parse(report).getroot().iter("testsuite"))
+if any(int(suite.get("skipped", "0")) for suite in suites):
     sys.exit("Suíte incompleta: testes pulados são proibidos neste runner.")
+
+# Resumo no GitHub Actions; fora do CI a variável não existe e nada é escrito.
+if summary := os.getenv("GITHUB_STEP_SUMMARY"):
+    total = sum(int(suite.get("tests", "0")) for suite in suites)
+    rate = float(ET.parse(coverage).getroot().get("line-rate", "0")) * 100
+    with open(summary, "a", encoding="utf-8") as output:
+        output.write(f"### Testes\n\n{total} testes aprovados, 0 pulados · cobertura de linhas de `app`: {rate:.1f}%\n")

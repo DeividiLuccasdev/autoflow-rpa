@@ -10,6 +10,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Celery + Redis](https://img.shields.io/badge/Celery%20%2B%20Redis-37814A?logo=celery&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue)](LICENSE)
 
 [**Demo ao vivo**](https://autoflow-rpa-api.onrender.com) · [Vídeo (28 s)](https://portfolio-deividi.vercel.app/projects/autoflow-rpa/apresentacao.mp4) ([MP4](docs/apresentacao.mp4) · [legendas](docs/apresentacao.vtt)) · [API (Swagger)](https://autoflow-rpa-api.onrender.com/docs) · [Portfólio](https://portfolio-deividi.vercel.app/)
 
@@ -106,7 +107,7 @@ Mais de 200 testes cobrem cadastro e upload, concorrência no PostgreSQL, entreg
 
 Lint e formatação usam [ruff](https://docs.astral.sh/ruff/) (`ruff check .` e `ruff format .` na raiz; há um hook opcional de [pre-commit](https://pre-commit.com/)).
 
-O CI (GitHub Actions) verifica lint e formatação, roda a suíte completa, audita dependências, constrói a imagem Docker e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
+O CI (GitHub Actions) verifica lint e formatação, roda a suíte completa com relatório de cobertura, audita dependências, constrói a imagem Docker e faz um smoke test dela, e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
 
 ## Estrutura
 
@@ -154,3 +155,7 @@ scripts/            # geração de fixtures e runner de testes
 ## Autor
 
 **Deividi Luccas** · [Portfólio](https://portfolio-deividi.vercel.app/) · [GitHub](https://github.com/DeividiLuccasdev)
+
+## Licença
+
+[MIT](LICENSE)

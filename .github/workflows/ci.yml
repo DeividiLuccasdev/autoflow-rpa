@@ -56,9 +56,12 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+            backend/requirements-rpa.txt
       - run: python -m pip install "pip>=26.2,<27"
-      - run: pip install -r requirements-rpa.txt
+      - run: pip install -r requirements-dev.txt -r requirements-rpa.txt
       - run: python -m playwright install --with-deps chromium
       - run: python -m pip check
       - run: pip install pip-audit
@@ -68,7 +71,9 @@ jobs:
         if: always()
         with:
           name: integration-test-results
-          path: backend/test-results.xml
+          path: |
+            backend/test-results.xml
+            backend/coverage.xml
   container:
     needs: tests
     runs-on: ubuntu-latest
@@ -76,6 +81,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build --tag autoflow-backend:ci ./backend
+      - name: Imagem de produção não contém testes nem ferramentas de desenvolvimento
+        run: |
+          docker run --rm autoflow-backend:ci sh -c '! test -e tests && ! test -e rpa && ! python -c "import pytest"'
+      - name: Smoke test da imagem (migração + /ready)
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e AUTOFLOW_API_KEY="$(openssl rand -hex 32)" \
+            -e DATABASE_URL=sqlite:////tmp/smoke.db \
+            autoflow-backend:ci \
+            sh -c "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8000/ready && exit 0
+            sleep 1
+          done
+          docker logs api
+          exit 1
   rpa-browser:
     needs: tests
     runs-on: ubuntu-latest
@@ -89,7 +110,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install "pip>=26.2,<27"
-      - run: pip install -r requirements-rpa.txt
+      - run: pip install -r requirements-dev.txt -r requirements-rpa.txt
       - run: pip install pip-audit
       - run: python -m playwright install --with-deps chromium
       - run: python -m pip_audit --local
