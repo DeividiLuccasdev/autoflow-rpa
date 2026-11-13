@@ -106,7 +106,7 @@ Mais de 200 testes cobrem cadastro e upload, concorrência no PostgreSQL, entreg
 
 Lint e formatação usam [ruff](https://docs.astral.sh/ruff/) (`ruff check .` e `ruff format .` na raiz; há um hook opcional de [pre-commit](https://pre-commit.com/)).
 
-O CI (GitHub Actions) verifica lint e formatação, roda a suíte completa, audita dependências, constrói a imagem Docker e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
+O CI (GitHub Actions) verifica lint e formatação, roda a suíte completa com relatório de cobertura, audita dependências, constrói a imagem Docker e faz um smoke test dela, e publica as evidências do robô Playwright. O deploy no Render só acontece depois que os checks passam.
 
 ## Estrutura
 

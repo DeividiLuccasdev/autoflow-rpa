@@ -22,3 +22,7 @@ Escopo: código do AutoFlow, dependências instaladas no ambiente de desenvolvim
 ## Limitações que permanecem explícitas
 
 O demo não deve receber dados reais. A etapa posterior de [contas por convite](accounts.md) adiciona identidade individual, CSRF e separação financeira; a chave compartilhada permanece somente para o acervo legado e emissão de convites. Ainda não há RBAC de organizações. Estado da demonstração e limites de frequência são locais ao processo e somem no reinício. O parser privado não está isolado em subprocesso; somente o PDF canônico é aceito publicamente. Uso de produção exige recuperação de contas, isolamento do parser, controle de taxa distribuído, política de retenção/backups e monitoramento. O banco gratuito permanece sujeito aos limites do plano contratado.
+
+## Atualização — 13/11/2026: IP do cliente no Render
+
+O risco previsto acima se confirmou: no Render, a conexão chega sempre do proxy interno (endereço 10.x), então todos os visitantes dividiam o mesmo limite de frequência. O `X-Forwarded-For` continua descartado, porque o proxy do Render acrescenta valores ao que o cliente envia e o cabeçalho pode ser forjado. Quando `RENDER=true`, a chave do limite passa a ser o `CF-Connecting-IP`, que o Cloudflare na frente do serviço sobrescreve com o IP real. Fora do Render esse cabeçalho é ignorado. Testes cobrem os dois casos.

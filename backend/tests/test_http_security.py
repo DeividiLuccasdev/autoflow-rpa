@@ -1,4 +1,5 @@
 import asyncio
+from collections import OrderedDict
 from uuid import uuid4
 
 import pytest
@@ -114,3 +115,38 @@ def test_limiter_memory_is_bounded():
         assert limiter.allow(str(i), "demo", 1)
     assert not limiter.allow("new-peer", "demo", 1)
     assert len(limiter.buckets) == 2048
+
+
+def test_render_uses_cloudflare_client_ip(client, monkeypatch):
+    http, _ = client
+    monkeypatch.setattr("app.demo.automation.sessions", OrderedDict())
+    monkeypatch.setenv("RENDER", "true")
+    # Todos chegam do mesmo proxy interno, mas são visitantes distintos para o Cloudflare.
+    for i in range(20):
+        response = http.post(
+            "/demo/automation/runs",
+            headers={"X-Demo-Session": str(uuid4()), "CF-Connecting-IP": f"198.51.100.{i}"},
+        )
+        assert response.status_code == 201
+    for _ in range(15):
+        http.post(
+            "/demo/automation/runs", headers={"X-Demo-Session": str(uuid4()), "CF-Connecting-IP": "198.51.100.250"}
+        )
+    response = http.post(
+        "/demo/automation/runs", headers={"X-Demo-Session": str(uuid4()), "CF-Connecting-IP": "198.51.100.250"}
+    )
+    assert response.status_code == 429
+
+
+def test_cloudflare_header_ignored_outside_render(client, monkeypatch):
+    http, _ = client
+    monkeypatch.setattr("app.demo.automation.sessions", OrderedDict())
+    monkeypatch.delenv("RENDER", raising=False)
+    for i in range(15):
+        http.post(
+            "/demo/automation/runs", headers={"X-Demo-Session": str(uuid4()), "CF-Connecting-IP": f"198.51.100.{i}"}
+        )
+    response = http.post(
+        "/demo/automation/runs", headers={"X-Demo-Session": str(uuid4()), "CF-Connecting-IP": "198.51.100.99"}
+    )
+    assert response.status_code == 429

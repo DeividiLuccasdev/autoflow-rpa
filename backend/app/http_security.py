@@ -12,6 +12,22 @@ from .config import settings
 from .security import authenticate_scope
 
 
+def client_ip(scope, headers) -> str:
+    """Endereço usado como chave do limite de frequência.
+
+    X-Forwarded-For nunca é usado: o proxy do Render acrescenta valores ao que o cliente envia,
+    então o cabeçalho pode ser forjado. No Render, a conexão chega sempre do proxy interno
+    (10.x), e todos os visitantes dividiriam o mesmo limite. Lá, o Cloudflare que fica na frente
+    do serviço sobrescreve CF-Connecting-IP com o IP real do cliente. Fora do Render esse
+    cabeçalho é ignorado, porque qualquer cliente poderia enviá-lo.
+    """
+    if settings.behind_https_proxy:
+        forwarded = headers.get(b"cf-connecting-ip", b"").decode("latin-1").strip()
+        if forwarded and len(forwarded) <= 45:
+            return forwarded
+    return (scope.get("client") or ("unknown", 0))[0]
+
+
 class SlidingLimiter:
     def __init__(self):
         self.buckets = OrderedDict()
@@ -88,8 +104,7 @@ class HttpSecurityMiddleware:
                 message = {**message, "headers": values}
             await send(message)
 
-        # Não confia em X-Forwarded-For fornecido pelo cliente.
-        peer = (scope.get("client") or ("unknown", 0))[0]
+        peer = client_ip(scope, headers)
         group, maximum = None, 0
         if path.startswith("/api/v1/"):
             group, maximum = "private", 60
