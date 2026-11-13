@@ -3,6 +3,7 @@ const safe=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;
 const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 let employee=null, employeeCsrf='', employeeResults=[], openedDocument=null, recognition=null, listening=false, commandBusy=false;
 let voiceActive=false, voiceCancelled=false, voiceSubmitted=false;
+let voicePrefix='';
 
 function cancelVoiceInput(){
   voiceCancelled=true;
@@ -85,22 +86,34 @@ function setupRecognition(){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!Recognition){byId('voice-start').disabled=true;byId('voice-status').textContent='Este navegador não oferece reconhecimento de voz. Continue digitando ou use um navegador compatível.';return;}
   if(recognition)return;
-  recognition=new Recognition();recognition.lang='pt-BR';recognition.continuous=false;recognition.interimResults=true;recognition.maxAlternatives=1;
+  recognition=new Recognition();recognition.lang='pt-BR';recognition.continuous=true;recognition.interimResults=true;recognition.maxAlternatives=1;
   recognition.onstart=()=>{if(voiceCancelled||!employee){recognition.abort();return;}listening=true;byId('voice-start').setAttribute('aria-pressed','true');byId('voice-stop').hidden=false;byId('voice-status').textContent='Ouvindo… o texto aparece enquanto você fala.';};
   recognition.onresult=event=>{
     if(!employee||!voiceActive||voiceCancelled||voiceSubmitted)return;
     const results=Array.from(event.results);
-    const text=results.map(result=>result[0].transcript.trim()).filter(Boolean).join(' ');
+    const text=[voicePrefix,...results.map(result=>result[0].transcript.trim())].filter(Boolean).join(' ');
     byId('employee-command').value=text;
     const finished=results.length>0&&results.every(result=>result.isFinal);
-    byId('voice-status').textContent=finished?'Entendi: '+text:'Transcrevendo: '+text;
-    if(finished&&text){voiceSubmitted=true;executeEmployeeCommand(text);}
+    byId('voice-status').textContent='Ouvindo: '+text+' · Diga “consulte” para buscar.';
+    const confirmation=text.match(/\bconsulte[.!?,;:]*\s*$/i);
+    if(finished&&confirmation){
+      const command=text.slice(0,confirmation.index).trim();
+      if(!command){byId('voice-status').textContent='Diga a nota ou o identificador antes de “consulte”.';return;}
+      voiceSubmitted=true;executeEmployeeCommand(command);
+    }
   };
-  recognition.onend=()=>{voiceActive=false;listening=false;byId('voice-start').setAttribute('aria-pressed','false');byId('voice-stop').hidden=true;if(!voiceCancelled&&!voiceSubmitted&&employee)byId('voice-status').textContent='Microfone encerrado. Confira o texto e clique em Consultar, ou fale novamente.';};
+  recognition.onend=()=>{
+    listening=false;
+    if(voiceActive&&!voiceCancelled&&!voiceSubmitted&&employee){
+      voicePrefix=byId('employee-command').value.trim();
+      try{recognition.start();return;}catch{byId('voice-status').textContent='A captura foi interrompida pelo navegador. Clique em Falar para continuar; sua transcrição foi preservada.';}
+    }
+    voiceActive=false;byId('voice-start').setAttribute('aria-pressed','false');byId('voice-stop').hidden=true;
+  };
   recognition.onerror=event=>{if(voiceCancelled||!employee)return;voiceCancelled=true;byId('voice-status').textContent=event.error==='not-allowed'?'Microfone não autorizado. Você pode continuar digitando.':event.error==='no-speech'?'Não ouvi um comando. Tente novamente ou digite.':'Não foi possível transcrever o áudio. Continue digitando ou tente novamente.';};
 }
-byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(voiceActive){recognition.stop();return;}voiceCancelled=false;voiceSubmitted=false;voiceActive=true;try{recognition.start();byId('voice-status').textContent='Ativando microfone…';}catch{voiceActive=false;byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
-byId('voice-stop').onclick=()=>recognition?.stop();
+byId('voice-start').onclick=()=>{if(!employee||!recognition||commandBusy)return;if(voiceActive){cancelVoiceInput();return;}voicePrefix='';voiceCancelled=false;voiceSubmitted=false;voiceActive=true;try{recognition.start();byId('voice-status').textContent='Ativando microfone… fale com calma e diga “consulte” ao terminar.';}catch{voiceActive=false;byId('voice-status').textContent='Aguarde o microfone ficar disponível ou digite o comando.';}};
+byId('voice-stop').onclick=()=>{cancelVoiceInput();byId('voice-status').textContent='Microfone parado. Nenhuma consulta foi enviada. Você pode corrigir o texto ou clicar em Consultar.';};
 byId('employee-command').addEventListener('input',()=>{if(voiceActive){cancelVoiceInput();byId('voice-status').textContent='Edição manual. Corrija o comando e clique em Consultar.';}});
 window.addEventListener('pagehide',cancelVoiceInput);
 employeeRequest('/me').then(response=>response.json()).then(showEmployee).catch(()=>{});
