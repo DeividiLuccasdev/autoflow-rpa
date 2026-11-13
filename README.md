@@ -122,7 +122,21 @@ Rotas sob `/demo/batches`, com `X-Demo-Session` UUID (exceto o ZIP):
 
 Os PDFs podem ser regenerados com `python scripts/create_batch_samples.py`.
 
-## Evoluções futuras
+## Assistente por R.E., voz e texto
+
+A página `/assistente` oferece uma simulação de acesso corporativo isolada das contas privadas. O funcionário digita R.E. e senha demonstrativos; depois pode falar ou digitar o mesmo comando. R.E. 1001 é operador de Araraquara; 2001 é supervisor de duas unidades; 3001 é auditor com identificadores mascarados e sem download. A senha pública é `AutoflowDemo2026!`. Todas as pessoas, identificadores e notas deste assistente são fictícios, sem valor fiscal. Esses acessos não autenticam funcionários de uma empresa real.
+
+O backend aplica o escopo na busca, nos detalhes e no PDF, independentemente da interface. O cookie opaco é HttpOnly, SameSite Strict e Secure em HTTPS; POSTs autenticados exigem token CSRF. A sessão dura até 20 minutos, é revogável e volátil, com limite de 128 sessões e 100 eventos por sessão. A auditoria não armazena áudio nem a transcrição integral com CPF/CNPJ. A sessão do assistente não autoriza a API privada de documentos.
+
+Buscas aceitam `nota 101`, CPF/CNPJ com pontuação, dígitos ditados individualmente e `listar minhas notas`. Identificadores incompletos não são preenchidos por inferência. Há comandos de contexto como `abrir a segunda nota`, `qual o valor`, `mostrar histórico`, `baixar PDF` e `sair`. O PDF é uma representação sintética dos campos da nota demonstrativa, não um documento fiscal recuperado de fonte externa.
+
+O microfone usa SpeechRecognition/webkitSpeechRecognition em português do Brasil, somente após ação do usuário. Compatibilidade, permissão do microfone e serviço de transcrição dependem do navegador; a digitação permanece disponível. O navegador pode enviar áudio ao seu serviço de reconhecimento, conforme o aviso exibido. O aplicativo não captura áudio na entrada por R.E. e não grava áudio. A política de microfone é liberada somente na página `/assistente`; as demais páginas mantêm `microphone=()`.
+
+Esta etapa não integra SSO, diretório corporativo, R.E.s reais, documentos privados existentes nem consulta governamental por CPF/CNPJ. Uma integração empresarial futura precisa associar o R.E. autenticado a permissões administradas e à fonte documental autorizada. Não use as credenciais públicas da simulação em produção.
+
+Referência de reconhecimento de voz: https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API/Using_the_Web_Speech_API
+
+## Evoluções futuras do ambiente completo
 
 Adicionar recuperação de conta, métricas de falha e reenvio operacional autorizado. Integrações empresariais externas, organizações/RBAC, frontend Next.js, OCR e IA continuam pendentes. O produto permanece destinado a dados fictícios de portfólio.
 

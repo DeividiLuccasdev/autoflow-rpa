@@ -17,6 +17,7 @@ from .http_security import HttpSecurityMiddleware
 from .demo import router as demo_router, ASSETS
 from .demo_automation import router as automation_router
 from .demo_batches import router as batches_router
+from .voice_assistant import router as voice_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from .accounts import router as accounts_router
@@ -126,6 +127,7 @@ app.include_router(accounts_router)
 app.include_router(demo_router)
 app.include_router(automation_router)
 app.include_router(batches_router)
+app.include_router(voice_router)
 app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
 
 @app.exception_handler(RequestValidationError)
