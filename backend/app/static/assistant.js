@@ -2,6 +2,7 @@ const byId=id=>document.getElementById(id);
 const safe=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const money=value=>Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 let employee=null, employeeCsrf='', employeeResults=[], openedDocument=null, recognition=null, listening=false, commandBusy=false;
+let collectionBusy=false;
 let voiceActive=false, voiceCancelled=false, voiceSubmitted=false;
 let voiceEpoch=0, voiceRestartTimer=null, voiceIdleTimer=null, voicePrefix='', voiceResume=false;
 function voiceEvent(event,detail={}){
@@ -27,12 +28,13 @@ function clearEmployee(){
   cancelVoiceInput();employee=null;employeeCsrf='';employeeResults=[];openedDocument=null;
   byId('assistant-panel').hidden=true;byId('login-panel').hidden=false;byId('document-detail').hidden=true;byId('employee-history').hidden=true;
   byId('document-results').replaceChildren();byId('document-fields').replaceChildren();byId('document-items').replaceChildren();byId('employee-events').replaceChildren();byId('assistant-answer').textContent='';byId('employee-command').value='';
+  byId('collection-preview').hidden=true;byId('collection-history').replaceChildren();byId('collection-message').textContent='';
 }
 function showEmployee(data){
   employee=data.profile;employeeCsrf=data.csrf_token;byId('login-panel').hidden=true;byId('assistant-panel').hidden=false;
   byId('employee-name').textContent=`R.E. ${employee.re} · ${employee.role}`;
   byId('employee-access').textContent=`${employee.name} · Unidades: ${employee.units.join(' e ')} · ${employee.download?'Download autorizado':'Sem download de PDF'} · ${employee.full_record?'Ficha completa de cobrança':'Nota, valor devedor e razão social'}`;
-  byId('employee-message').textContent='';setupRecognition();
+  byId('employee-message').textContent='';setupRecognition();loadCollections().catch(()=>{});
 }
 byId('employee-login').onsubmit=async event=>{
   event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;byId('employee-message').textContent='Autenticando R.E.…';
@@ -50,6 +52,8 @@ async function openEmployeeDocument(id){
   const response=await employeeRequest('/documents/'+encodeURIComponent(id));openedDocument=await response.json();
   byId('document-detail').hidden=false;byId('employee-history').hidden=true;byId('document-title').textContent='Nota '+openedDocument.number;
   byId('download-pdf').hidden=!openedDocument.can_download;
+  byId('generate-collection').hidden=!openedDocument.can_download;
+  byId('collection-preview').hidden=true;byId('collection-message').textContent='';
   const fields=[['Número',openedDocument.number],['Unidade',openedDocument.unit],['Data',openedDocument.date],['Razão social fictícia',openedDocument.debtor_name],[openedDocument.tax_type,openedDocument.tax_id],['Valor da nota',money(openedDocument.amount)],['Valor devedor da nota',money(openedDocument.outstanding_amount)],['Situação',openedDocument.status]];
   if(employee.full_record)fields.push(['Endereço fictício',openedDocument.address],['Telefone fictício',openedDocument.phone],['Valor total da dívida',money(openedDocument.total_debt)],['Parcelas restantes',openedDocument.remaining_installments]);
   byId('document-fields').innerHTML=fields.map(([label,value])=>`<div><dt>${safe(label)}</dt><dd>${safe(value)}</dd></div>`).join('');
@@ -89,6 +93,39 @@ byId('command-form').onsubmit=event=>{event.preventDefault();executeEmployeeComm
 document.querySelectorAll('[data-command]').forEach(button=>button.onclick=()=>executeEmployeeCommand(button.dataset.command));
 byId('show-history').onclick=()=>showEmployeeHistory().catch(error=>byId('employee-message').textContent=error.message);
 byId('download-pdf').onclick=()=>downloadEmployeePdf().catch(error=>byId('employee-message').textContent=error.message);
+
+function renderCollectionReceipt(receipt){
+  byId('collection-preview').hidden=false;
+  byId('collection-status').textContent=receipt.status+' · '+receipt.id;
+  byId('collection-sender').textContent=receipt.sender;
+  byId('collection-recipient').textContent=receipt.recipient;
+  byId('collection-subject').textContent=receipt.subject;
+  byId('collection-body').textContent=receipt.body;
+  byId('collection-attachment').textContent=receipt.attachment.filename;
+  byId('collection-attachment').href='/assistant/collections/'+encodeURIComponent(receipt.id)+'/pdf';
+}
+async function loadCollections(){
+  const csrf=employeeCsrf;
+  const data=await (await employeeRequest('/collections')).json();
+  if(!employee||csrf!==employeeCsrf)return;
+  byId('collection-history').innerHTML=(data.receipts||[]).map(receipt=>`<article class="collection-history-item"><span class="collection-sent">ENVIO SIMULADO</span><strong>Nota ${safe(receipt.number)} · ${money(receipt.amount)}</strong><p>${safe(receipt.recipient)}</p><small>${safe(receipt.id)} · ${new Date(receipt.created_at).toLocaleString('pt-BR')}</small><button type="button" class="secondary" data-collection="${safe(receipt.id)}">Ver e-mail e anexo ↗</button></article>`).join('');
+  document.querySelectorAll('[data-collection]').forEach(button=>button.onclick=()=>{const receipt=data.receipts.find(r=>r.id===button.dataset.collection);if(receipt)renderCollectionReceipt(receipt);});
+}
+async function generateCollection(){
+  if(collectionBusy||!openedDocument||!employee)return;
+  cancelVoiceInput();collectionBusy=true;const csrf=employeeCsrf;
+  const button=byId('generate-collection');button.disabled=true;button.textContent='Gerando nota e e-mail…';
+  byId('collection-message').textContent='Gerando o PDF e preenchendo a cobrança…';
+  try{
+    const receipt=await (await employeeRequest('/documents/'+encodeURIComponent(openedDocument.id)+'/collection','POST',{})).json();
+    if(!employee||csrf!==employeeCsrf)return;
+    renderCollectionReceipt(receipt);
+    byId('collection-message').textContent=receipt.replayed?'Esta cobrança já foi simulada nesta sessão. O mesmo protocolo foi preservado.':'Nota gerada, e-mail preenchido e envio simulado concluído automaticamente.';
+    await loadCollections();
+  }catch(error){if(employee&&csrf===employeeCsrf)byId('collection-message').textContent=error.message;}
+  finally{collectionBusy=false;button.disabled=false;button.textContent='Gerar nota e enviar cobrança →';}
+}
+byId('generate-collection').onclick=generateCollection;
 
 function setupRecognition(){
   const supported=window.SpeechRecognition||window.webkitSpeechRecognition;

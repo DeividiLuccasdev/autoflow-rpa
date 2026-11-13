@@ -182,6 +182,18 @@ def document(document_id: str,session=Depends(identity)):
         return serialize(doc,session["profile"])
 
 
+def build_demo_pdf(doc,profile):
+    with pymupdf.open() as output:
+        page = output.new_page()
+        lines = ["AUTOFLOW - NOTA DEMONSTRATIVA", "DOCUMENTO FICTICIO - SEM VALOR FISCAL",f'Nota: {doc["number"]}',f'Data: {doc["date"]}',f'Unidade: {doc["unit"]}',f'Destinatario: {doc["recipient"]}',f'{doc["tax_type"]}: {doc["tax_id"]}',f'Descricao: {doc["description"]}',f'Quantidade: 1 / Valor unitario: R$ {doc["amount"]}',f'Total: R$ {doc["amount"]}',f'Status: {doc["status"]}']
+        fields = serialize(doc,profile)
+        lines += [f'Razao social ficticia: {fields["debtor_name"]}',f'Valor devedor da nota: R$ {fields["outstanding_amount"]}']
+        if profile["full_record"]:
+            lines += [f'Endereco ficticio: {fields["address"]}',f'Telefone ficticio: {fields["phone"]}',f'Divida total: R$ {fields["total_debt"]}',f'Parcelas restantes: {fields["remaining_installments"]}']
+        page.insert_textbox(pymupdf.Rect(45,50,550,790),"\n\n".join(lines),fontsize=10)
+        return output.tobytes()
+
+
 @router.get("/assistant/documents/{document_id}/pdf")
 def pdf(document_id: str,session=Depends(identity)):
     with lock:
@@ -189,15 +201,7 @@ def pdf(document_id: str,session=Depends(identity)):
         if not session["profile"]["download"]:
             record(session,"download.denied","Perfil sem permissão para baixar PDF")
             raise HTTPException(403,"Seu perfil pode consultar, mas não baixar o PDF")
-        with pymupdf.open() as output:
-            page = output.new_page()
-            lines = ["AUTOFLOW - NOTA DEMONSTRATIVA", "DOCUMENTO FICTICIO - SEM VALOR FISCAL",f'Nota: {doc["number"]}',f'Data: {doc["date"]}',f'Unidade: {doc["unit"]}',f'Destinatario: {doc["recipient"]}',f'{doc["tax_type"]}: {doc["tax_id"]}',f'Descricao: {doc["description"]}',f'Quantidade: 1 / Valor unitario: R$ {doc["amount"]}',f'Total: R$ {doc["amount"]}',f'Status: {doc["status"]}']
-            fields = serialize(doc, session["profile"])
-            lines += [f'Razao social ficticia: {fields["debtor_name"]}',f'Valor devedor da nota: R$ {fields["outstanding_amount"]}']
-            if session["profile"]["full_record"]:
-                lines += [f'Endereco ficticio: {fields["address"]}',f'Telefone ficticio: {fields["phone"]}',f'Divida total: R$ {fields["total_debt"]}',f'Parcelas restantes: {fields["remaining_installments"]}']
-            page.insert_textbox(pymupdf.Rect(45,50,550,790),"\n\n".join(lines),fontsize=10)
-            content = output.tobytes()
+        content = build_demo_pdf(doc,session["profile"])
         record(session,"document.download",f'Nota {doc["number"]}')
         return Response(content,media_type="application/pdf",headers={"Content-Disposition":f'attachment; filename="autoflow-nota-demo-{doc["number"]}.pdf"'})
 
