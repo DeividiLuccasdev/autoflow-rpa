@@ -96,7 +96,33 @@ Resultados anteriores e detalhes do ambiente: [127 testes da primeira bateria](d
 
 O workflow `.github/workflows/ci.yml` executa testes completos com PostgreSQL, Redis, Celery e Chromium, audita dependências e constrói a imagem Docker. Dispara por push, pull request ou manualmente. O Render acompanha a branch main e está configurado para publicar após os checks passarem. O comando de início aplica as migrations antes de iniciar a API.
 
-## Próximos passos
+## Conciliação em lote e relatórios
+
+O botão **Executar demonstração completa** processa cinco entradas fictícias no backend: notas 101 e 104 conciliadas e confirmadas, nota 102 com valor divergente, reenvio da nota 101 bloqueado e nota 103 sem correspondência. O extrato também contém a nota 999 sem documento, exibida como pendência de conciliação. O valor confirmado inicial é R$ 211,10; a duplicidade não entra novamente na soma.
+
+O pacote ZIP público contém quatro PDFs sintéticos e `extrato.csv`. A interface aceita o envio manual de um a seis PDFs canônicos com um CSV UTF-8, limitado a 100 KB no total pelo cliente. No servidor, cada PDF tem limite de 64 KB, o extrato 16 KB/50 linhas e o corpo multipart público 128 KB. Documentos não fornecidos pelo projeto são recusados individualmente; não envie dados reais. O CSV tem cabeçalho exato `cnpj,numero,serie,valor`, valores positivos com ponto e duas casas decimais e uma única linha por identidade normalizada de nota.
+
+Cada avanço processa um documento, com extração real do PDF, comparação por CNPJ/número/série, verificação do valor e confirmação em um adaptador de destino em memória. Uma falha em um documento não impede o processamento dos demais. A versão esperada protege reenvios e avanços concorrentes. Um UUID de envio torna a criação idempotente; reutilizá-lo com arquivos diferentes retorna conflito. A central permite retomar um lote após recarregar a página, enquanto a sessão continuar válida.
+
+Depois do processamento, divergências de valor aceitam correção da origem simulada e aprovação com justificativa, ou rejeição. O valor original do extrato permanece na auditoria. Sem correspondência, a aprovação é bloqueada: rejeite ou envie um novo lote com o extrato corrigido. Decisões concorrentes têm um único efeito. Uma nova conciliação na mesma sessão não repete notas já confirmadas. A contabilidade dos lotes é separada da demonstração individual.
+
+Relatórios CSV e JSON incluem resultado por documento, valores, protocolos e auditoria; linhas do extrato sem documento aparecem nos dois formatos. A exportação CSV neutraliza células que poderiam ser interpretadas como fórmulas. JSON preserva os eventos e timestamps. O valor confirmado soma apenas documentos registrados pelo lote atual; documentos de referência de outros lotes não são contados de novo.
+
+Limites: dois lotes por sessão, seis documentos por lote, até 128 sessões ativas e TTL compartilhado de 15 minutos. O estado é volátil e requer o mesmo processo HTTP único da demonstração anterior. O fluxo público não usa Celery/Redis, não realiza pagamentos e não acessa um ERP externo. Cada passo é uma requisição real ao backend, não uma animação que inventa resultados. OCR, IA e Power Automate não foram adicionados nesta etapa.
+
+Rotas sob `/demo/batches`, com `X-Demo-Session` UUID (exceto o ZIP):
+
+- `GET /samples.zip`: exemplos fictícios.
+- `POST /example?request_id=UUID`: lote completo pré-configurado.
+- `POST /`: multipart `request_id`, `files` e `statement`.
+- `GET /summary` e `GET /{id}`: acompanhamento.
+- `POST /{id}/advance?expected_version=N`: processa um documento.
+- `POST /{id}/items/{item_id}/review`: decisão com justificativa.
+- `GET /{id}/report?format=csv|json`: exportação da conciliação e auditoria.
+
+Os PDFs podem ser regenerados com `python scripts/create_batch_samples.py`.
+
+## Evoluções futuras
 
 Adicionar recuperação de conta, métricas de falha e reenvio operacional autorizado. Integrações empresariais externas, organizações/RBAC, frontend Next.js, OCR e IA continuam pendentes. O produto permanece destinado a dados fictícios de portfólio.
 
